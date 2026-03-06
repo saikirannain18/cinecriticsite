@@ -1,6 +1,15 @@
 import { useState, useEffect, Component } from "react";
 import { Top250Page, MostPopularPage, NewReleasesPage, ReleaseCalendarPage } from "./MoviePages";
 
+// Auto-upgrades any TMDb poster URL to w780 for crisp display on all screens
+// w342 → too small, w500 → OK desktop, w780 → sharp on all phones
+function getPoster(url) {
+  if (!url) return "";
+  return url.replace("/t/p/w500/", "/t/p/w1280/")
+            .replace("/t/p/w342/", "/t/p/w1280/")
+            .replace("/t/p/w185/", "/t/p/w1280/");
+}
+
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDi9KTtfyOHY8McVA1ObzloNOekGY_tgfI",
   authDomain: "cinecriticdb.firebaseapp.com",
@@ -11,18 +20,18 @@ const FIREBASE_CONFIG = {
 };
 
 const FALLBACK_MOVIES = [
-  { id: "1",  title: "Oppenheimer",                       year: 2023, genre: ["Drama", "History"],     imdb: 8.9, director: "Christopher Nolan",   poster: "https://image.tmdb.org/t/p/w500/8Gxv8giaFIzmZTKykFCdna8FAUh.jpg",  review: "A stunning, profound portrait of the man who split the world apart. Nolan's magnum opus delivers unparalleled tension and breathtaking cinematography.",  reviewer: "Alex Turner", featured: true,  rating: "R",     runtime: "180 min" },
-  { id: "2",  title: "Dune: Part Two",                    year: 2024, genre: ["Sci-Fi", "Adventure"],  imdb: 8.5, director: "Denis Villeneuve",     poster: "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",  review: "Epic in every sense. Villeneuve completes his vision with jaw-dropping scale and performances that haunt you long after the credits roll.",             reviewer: "Alex Turner", featured: true,  rating: "PG-13", runtime: "166 min" },
-  { id: "3",  title: "The Batman",                        year: 2022, genre: ["Action", "Crime"],      imdb: 7.8, director: "Matt Reeves",          poster: "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg",  review: "Dark, brooding and methodical. Reeves reinvents the Caped Crusader as a noir detective. Pattinson is revelatory.",                                    reviewer: "Alex Turner", featured: false, rating: "PG-13", runtime: "176 min" },
-  { id: "4",  title: "Parasite",                          year: 2019, genre: ["Thriller", "Drama"],    imdb: 8.5, director: "Bong Joon-ho",         poster: "https://image.tmdb.org/t/p/w500/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg",  review: "A perfectly constructed social thriller that shifts genre like a snake shedding skin. Unmissable cinema.",                                            reviewer: "Alex Turner", featured: false, rating: "R",     runtime: "132 min" },
-  { id: "5",  title: "The Godfather",                     year: 1972, genre: ["Crime", "Drama"],       imdb: 9.2, director: "Francis Ford Coppola", poster: "https://image.tmdb.org/t/p/w500/3bhkrj58Vtu7enYsLeBMapLGMGw.jpg",  review: "The pinnacle of American cinema. Coppola's epic remains the benchmark against which all crime films are measured.",                                    reviewer: "Alex Turner", featured: true,  rating: "R",     runtime: "175 min" },
-  { id: "6",  title: "Interstellar",                      year: 2014, genre: ["Sci-Fi", "Adventure"],  imdb: 8.7, director: "Christopher Nolan",   poster: "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIE.jpg",  review: "A transcendent journey across space and time. Nolan blends hard science with raw parental love to create one of cinema's most ambitious achievements.", reviewer: "Alex Turner", featured: false, rating: "PG-13", runtime: "169 min" },
-  { id: "7",  title: "Inception",                         year: 2010, genre: ["Action", "Sci-Fi"],     imdb: 8.8, director: "Christopher Nolan",   poster: "https://image.tmdb.org/t/p/w500/edv5CZvWj09upOsy2Y6IwDhK8bt.jpg",  review: "A labyrinthine puzzle wrapped in a blockbuster. Nolan makes the impossible feel visceral and emotionally resonant through sheer filmmaking bravado.",   reviewer: "Alex Turner", featured: false, rating: "PG-13", runtime: "148 min" },
-  { id: "8",  title: "Whiplash",                          year: 2014, genre: ["Drama", "Music"],       imdb: 8.5, director: "Damien Chazelle",      poster: "https://image.tmdb.org/t/p/w500/7fn624j5lj3xTme2SgiLCeuedmO.jpg",  review: "The most visceral film about artistic obsession ever made. Chazelle and Simmons turn a music drama into a psychological war. Pure adrenaline.",         reviewer: "Alex Turner", featured: false, rating: "R",     runtime: "107 min" },
-  { id: "9",  title: "Everything Everywhere All at Once", year: 2022, genre: ["Comedy", "Sci-Fi"],     imdb: 7.8, director: "Daniel Kwan",          poster: "https://image.tmdb.org/t/p/w500/w3LxiVYdWWRvEVdn5RYq6jIqkb1.jpg",  review: "Audacious, chaotic, and unexpectedly moving. The Daniels craft a multiverse epic about love and identity with astonishing emotional depth.",             reviewer: "Alex Turner", featured: false, rating: "R",     runtime: "139 min" },
-  { id: "10", title: "Mad Max: Fury Road",                year: 2015, genre: ["Action", "Adventure"],  imdb: 8.1, director: "George Miller",        poster: "https://image.tmdb.org/t/p/w500/8tZYtuWezp8JbcsvHYO0O46tFbo.jpg",  review: "Two hours of relentless operatic stunt-driven cinema. Miller's return is a lesson in pure action filmmaking that puts modern blockbusters to shame.",   reviewer: "Alex Turner", featured: false, rating: "R",     runtime: "120 min" },
-  { id: "11", title: "Joker",                             year: 2019, genre: ["Crime", "Drama"],       imdb: 8.4, director: "Todd Phillips",        poster: "https://image.tmdb.org/t/p/w500/udDclJoHjfjb8Ekgsd4FDteOkCU.jpg",  review: "Phoenix transforms himself completely. A deeply uncomfortable character study that dares to make a monster sympathetic.",                               reviewer: "Alex Turner", featured: false, rating: "R",     runtime: "122 min" },
-  { id: "12", title: "The Dark Knight",                   year: 2008, genre: ["Action", "Crime"],      imdb: 9.0, director: "Christopher Nolan",   poster: "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg",  review: "Ledger's Joker is one of cinema's greatest villains. Nolan elevates superhero storytelling into genuine moral tragedy. A masterpiece.",                  reviewer: "Alex Turner", featured: true,  rating: "PG-13", runtime: "152 min" },
+  { id: "1",  title: "Oppenheimer",                       year: 2023, genre: ["Drama", "History"],     imdb: 8.9, director: "Christopher Nolan",   poster: "https://image.tmdb.org/t/p/w1280/8Gxv8giaFIzmZTKykFCdna8FAUh.jpg",  review: "A stunning, profound portrait of the man who split the world apart. Nolan's magnum opus delivers unparalleled tension and breathtaking cinematography.",  reviewer: "Alex Turner", featured: true,  rating: "R",     runtime: "180 min" },
+  { id: "2",  title: "Dune: Part Two",                    year: 2024, genre: ["Sci-Fi", "Adventure"],  imdb: 8.5, director: "Denis Villeneuve",     poster: "https://image.tmdb.org/t/p/w1280/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",  review: "Epic in every sense. Villeneuve completes his vision with jaw-dropping scale and performances that haunt you long after the credits roll.",             reviewer: "Alex Turner", featured: true,  rating: "PG-13", runtime: "166 min" },
+  { id: "3",  title: "The Batman",                        year: 2022, genre: ["Action", "Crime"],      imdb: 7.8, director: "Matt Reeves",          poster: "https://image.tmdb.org/t/p/w1280/74xTEgt7R36Fpooo50r9T25onhq.jpg",  review: "Dark, brooding and methodical. Reeves reinvents the Caped Crusader as a noir detective. Pattinson is revelatory.",                                    reviewer: "Alex Turner", featured: false, rating: "PG-13", runtime: "176 min" },
+  { id: "4",  title: "Parasite",                          year: 2019, genre: ["Thriller", "Drama"],    imdb: 8.5, director: "Bong Joon-ho",         poster: "https://image.tmdb.org/t/p/w1280/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg",  review: "A perfectly constructed social thriller that shifts genre like a snake shedding skin. Unmissable cinema.",                                            reviewer: "Alex Turner", featured: false, rating: "R",     runtime: "132 min" },
+  { id: "5",  title: "The Godfather",                     year: 1972, genre: ["Crime", "Drama"],       imdb: 9.2, director: "Francis Ford Coppola", poster: "https://image.tmdb.org/t/p/w1280/3bhkrj58Vtu7enYsLeBMapLGMGw.jpg",  review: "The pinnacle of American cinema. Coppola's epic remains the benchmark against which all crime films are measured.",                                    reviewer: "Alex Turner", featured: true,  rating: "R",     runtime: "175 min" },
+  { id: "6",  title: "Interstellar",                      year: 2014, genre: ["Sci-Fi", "Adventure"],  imdb: 8.7, director: "Christopher Nolan",   poster: "https://image.tmdb.org/t/p/w1280/gEU2QniE6E77NI6lCU6MxlNBvIE.jpg",  review: "A transcendent journey across space and time. Nolan blends hard science with raw parental love to create one of cinema's most ambitious achievements.", reviewer: "Alex Turner", featured: false, rating: "PG-13", runtime: "169 min" },
+  { id: "7",  title: "Inception",                         year: 2010, genre: ["Action", "Sci-Fi"],     imdb: 8.8, director: "Christopher Nolan",   poster: "https://image.tmdb.org/t/p/w1280/edv5CZvWj09upOsy2Y6IwDhK8bt.jpg",  review: "A labyrinthine puzzle wrapped in a blockbuster. Nolan makes the impossible feel visceral and emotionally resonant through sheer filmmaking bravado.",   reviewer: "Alex Turner", featured: false, rating: "PG-13", runtime: "148 min" },
+  { id: "8",  title: "Whiplash",                          year: 2014, genre: ["Drama", "Music"],       imdb: 8.5, director: "Damien Chazelle",      poster: "https://image.tmdb.org/t/p/w1280/7fn624j5lj3xTme2SgiLCeuedmO.jpg",  review: "The most visceral film about artistic obsession ever made. Chazelle and Simmons turn a music drama into a psychological war. Pure adrenaline.",         reviewer: "Alex Turner", featured: false, rating: "R",     runtime: "107 min" },
+  { id: "9",  title: "Everything Everywhere All at Once", year: 2022, genre: ["Comedy", "Sci-Fi"],     imdb: 7.8, director: "Daniel Kwan",          poster: "https://image.tmdb.org/t/p/w1280/w3LxiVYdWWRvEVdn5RYq6jIqkb1.jpg",  review: "Audacious, chaotic, and unexpectedly moving. The Daniels craft a multiverse epic about love and identity with astonishing emotional depth.",             reviewer: "Alex Turner", featured: false, rating: "R",     runtime: "139 min" },
+  { id: "10", title: "Mad Max: Fury Road",                year: 2015, genre: ["Action", "Adventure"],  imdb: 8.1, director: "George Miller",        poster: "https://image.tmdb.org/t/p/w1280/8tZYtuWezp8JbcsvHYO0O46tFbo.jpg",  review: "Two hours of relentless operatic stunt-driven cinema. Miller's return is a lesson in pure action filmmaking that puts modern blockbusters to shame.",   reviewer: "Alex Turner", featured: false, rating: "R",     runtime: "120 min" },
+  { id: "11", title: "Joker",                             year: 2019, genre: ["Crime", "Drama"],       imdb: 8.4, director: "Todd Phillips",        poster: "https://image.tmdb.org/t/p/w1280/udDclJoHjfjb8Ekgsd4FDteOkCU.jpg",  review: "Phoenix transforms himself completely. A deeply uncomfortable character study that dares to make a monster sympathetic.",                               reviewer: "Alex Turner", featured: false, rating: "R",     runtime: "122 min" },
+  { id: "12", title: "The Dark Knight",                   year: 2008, genre: ["Action", "Crime"],      imdb: 9.0, director: "Christopher Nolan",   poster: "https://image.tmdb.org/t/p/w1280/qJ2tW6WMUDux911r6m7haRef0WH.jpg",  review: "Ledger's Joker is one of cinema's greatest villains. Nolan elevates superhero storytelling into genuine moral tragedy. A masterpiece.",                  reviewer: "Alex Turner", featured: true,  rating: "PG-13", runtime: "152 min" },
 ];
 
 const RATINGS_FILTER = ["All", "9+", "8.5+", "8+", "7.5+"];
@@ -72,7 +81,7 @@ function FallbackApp() {
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))", gap:12 }}>
           {FALLBACK_MOVIES.map(m => (
             <div key={m.id} onClick={() => setSel(m)} style={{ cursor:"pointer", borderRadius:10, overflow:"hidden", background:"#141414", border:"1px solid #222" }}>
-              <img src={m.poster} alt={m.title} style={{ width:"100%", aspectRatio:"2/3", objectFit:"cover" }} onError={e => { e.target.src=`https://placehold.co/300x450/1a1a1a/F5C518?text=${encodeURIComponent(m.title)}`; }} />
+              <img src={getPoster(m.poster)} alt={m.title} style={{ width:"100%", aspectRatio:"2/3", objectFit:"cover" }} onError={e => { e.target.src=`https://placehold.co/300x450/1a1a1a/F5C518?text=${encodeURIComponent(m.title)}`; }} />
               <div style={{ padding:"8px 10px" }}>
                 <p style={{ fontFamily:"'Anton',sans-serif", fontSize:12, color:"#fff", margin:"0 0 2px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.title}</p>
                 <span style={{ fontFamily:"'Space Mono',monospace", fontSize:9, color:"#F5C518" }}>{m.year}</span>
@@ -129,13 +138,15 @@ const MovieCard = ({ movie, onClick, isMobile }) => {
       style={{
         borderRadius:10, overflow:"hidden", background:"#141414", cursor:"pointer",
         border:     hovered ? "1px solid #F5C518" : "1px solid #1e1e1e",
-        transform:  hovered ? "translateY(-4px)" : "none",
-        transition: "all 0.25s ease",
+        transition: "border-color 0.25s ease, box-shadow 0.25s ease",
         boxShadow:  hovered ? "0 16px 36px rgba(245,197,24,0.18)" : "0 2px 10px rgba(0,0,0,0.4)",
       }}>
       <div style={{ position:"relative", aspectRatio:"2/3", overflow:"hidden" }}>
-        <img src={movie.poster} alt={movie.title}
-          style={{ width:"100%", height:"100%", objectFit:"cover", transform: hovered ? "scale(1.06)" : "scale(1)", transition:"transform 0.35s ease" }}
+        <img src={getPoster(movie.poster)} alt={movie.title}
+          style={{
+            width:"100%", height:"100%", objectFit:"cover", display:"block",
+            WebkitBackfaceVisibility:"hidden", backfaceVisibility:"hidden",
+          }}
           onError={e => { e.target.src=`https://placehold.co/300x450/1a1a1a/F5C518?text=${encodeURIComponent(movie.title)}`; }} />
         <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 55%)" }} />
         <div style={{ position:"absolute", top:6, right:6 }}><ImdbBadge score={movie.imdb} small /></div>
@@ -166,39 +177,106 @@ const MovieCard = ({ movie, onClick, isMobile }) => {
 const HeroBanner = ({ movie, onClick, isMobile }) => {
   const [hov, setHov] = useState(false);
   if (!movie) return null;
+
   return (
-    <div onClick={() => onClick(movie)} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+    <div onClick={() => onClick(movie)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
-        position:"relative", borderRadius: isMobile ? 12 : 16, overflow:"hidden", cursor:"pointer",
-        marginBottom: isMobile ? 16 : 24, height: isMobile ? 220 : 340,
-        boxShadow: hov ? "0 24px 48px rgba(245,197,24,0.15)" : "0 8px 32px rgba(0,0,0,0.6)",
+        position:"relative",
+        borderRadius: isMobile ? 12 : 16,
+        cursor:"pointer",
+        marginBottom: isMobile ? 16 : 24,
+        height: isMobile ? 200 : 340,
+        background:"#0a0a0a",
+        overflow:"hidden",
+        boxShadow: hov ? "0 24px 48px rgba(245,197,24,0.18)" : "0 8px 32px rgba(0,0,0,0.7)",
         transition:"box-shadow 0.3s ease",
       }}>
-      <img src={movie.poster} alt={movie.title}
-        style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center top",
-          filter:"brightness(0.35)", transform: hov ? "scale(1.03)" : "scale(1)", transition:"transform 0.5s ease" }}
-        onError={e => { e.target.src=`https://placehold.co/800x340/0a0a0a/F5C518?text=${encodeURIComponent(movie.title)}`; }} />
-      <div style={{ position:"absolute", inset:0, background: isMobile
-        ? "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)"
-        : "linear-gradient(110deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.44) 55%, transparent 100%)" }} />
-      <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column", justifyContent:"flex-end", padding: isMobile ? "16px 14px" : "28px 32px" }}>
-        <div style={{ display:"flex", gap:8, marginBottom: isMobile ? 5 : 8, alignItems:"center" }}>
-          <span style={{ background:"#F5C518", color:"#000", fontSize: isMobile ? 7 : 9, fontFamily:"'Anton',sans-serif", letterSpacing:2, padding: isMobile ? "2px 6px" : "3px 9px", borderRadius:3 }}>FEATURED</span>
-          <ImdbBadge score={movie.imdb} small={isMobile} />
+
+      {/* LAYER 1: blurred bg - in separate div so overflow hidden doesnt clip it */}
+      <div style={{ position:"absolute", top:"-20px", left:"-20px", right:"-20px", bottom:"-20px", zIndex:0 }}>
+        <img src={getPoster(movie.poster)} alt=""
+          style={{ width:"100%", height:"100%", objectFit:"cover",
+            filter:"blur(28px) brightness(0.22) saturate(1.5)" }} />
+      </div>
+
+      {/* LAYER 2: dark gradient */}
+      <div style={{
+        position:"absolute", inset:0, zIndex:1,
+        background: isMobile
+          ? "linear-gradient(to right, rgba(0,0,0,0.92) 50%, rgba(0,0,0,0.2) 100%)"
+          : "linear-gradient(to right, rgba(0,0,0,0.95) 30%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,0.0) 100%)",
+      }} />
+
+      {/* LAYER 3: content row */}
+      <div style={{
+        position:"absolute", inset:0, zIndex:2,
+        display:"flex", flexDirection:"row",
+        alignItems:"center", justifyContent:"space-between",
+        padding: isMobile ? "16px" : "28px 36px",
+        gap: isMobile ? 10 : 28,
+      }}>
+
+        {/* LEFT: text */}
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:"flex", gap:8, marginBottom: isMobile ? 6 : 10, alignItems:"center", flexWrap:"wrap" }}>
+            <span style={{ background:"#F5C518", color:"#000", fontFamily:"'Anton',sans-serif",
+              fontSize: isMobile ? 7 : 9, letterSpacing:2,
+              padding: isMobile ? "2px 6px" : "3px 9px", borderRadius:3 }}>FEATURED</span>
+            <ImdbBadge score={movie.imdb} small={isMobile} />
+          </div>
+          <h2 style={{ margin:"0 0 6px", color:"#fff",
+            fontSize: isMobile ? 18 : 32,
+            fontFamily:"'Anton',sans-serif", letterSpacing:1, lineHeight:1.05,
+            display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden",
+          }}>{movie.title}</h2>
+          <div style={{ display:"flex", gap:8, marginBottom: isMobile ? 5 : 10, alignItems:"center", flexWrap:"wrap" }}>
+            <span style={{ color:"#F5C518", fontFamily:"'Space Mono',monospace", fontSize: isMobile ? 9 : 11 }}>{movie.year}</span>
+            <span style={{ color:"#444" }}>•</span>
+            <span style={{ color:"#bbb", fontSize: isMobile ? 9 : 10, fontFamily:"'Space Mono',monospace" }}>
+              {isMobile ? movie.director.split(" ").pop() : "Dir. " + movie.director}
+            </span>
+            {!isMobile && <><span style={{ color:"#444" }}>•</span><span style={{ color:"#999", fontSize:10, fontFamily:"'Space Mono',monospace" }}>{movie.runtime}</span></>}
+          </div>
+          <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom: isMobile ? 5 : 12 }}>
+            {(movie.genre||[]).slice(0, isMobile ? 2 : 4).map(g => (
+              <span key={g} style={{ background:"rgba(245,197,24,0.12)", border:"1px solid rgba(245,197,24,0.3)",
+                color:"#F5C518", borderRadius:20, padding:"2px 8px",
+                fontSize: isMobile ? 7 : 9, fontFamily:"'Space Mono',monospace" }}>{g}</span>
+            ))}
+          </div>
+          {!isMobile && (
+            <p style={{ color:"#bbb", fontFamily:"'Lora',serif", fontSize:12.5,
+              lineHeight:1.7, maxWidth:460, margin:"0 0 12px", fontStyle:"italic",
+              display:"-webkit-box", WebkitLineClamp:3, WebkitBoxOrient:"vertical", overflow:"hidden"
+            }}>&ldquo;{movie.review}&rdquo;</p>
+          )}
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <StarRating score={movie.imdb} small={isMobile} />
+            <span style={{ color:"#555", fontFamily:"'Space Mono',monospace", fontSize: isMobile ? 8 : 10 }}>— {movie.reviewer}</span>
+          </div>
         </div>
-        <h2 style={{ margin:"0 0 4px", color:"#fff", fontSize: isMobile ? 22 : 36, fontFamily:"'Anton',sans-serif", letterSpacing:1, lineHeight:1 }}>{movie.title}</h2>
-        <div style={{ display:"flex", gap:10, marginBottom: isMobile ? 6 : 10, alignItems:"center", flexWrap:"wrap" }}>
-          <span style={{ color:"#F5C518", fontFamily:"'Space Mono',monospace", fontSize: isMobile ? 9 : 11 }}>{movie.year}</span>
-          <span style={{ color:"#444" }}>•</span>
-          <span style={{ color:"#999", fontSize: isMobile ? 9 : 10, fontFamily:"'Space Mono',monospace" }}>Dir. {movie.director}</span>
-          {!isMobile && <><span style={{ color:"#444" }}>•</span><span style={{ color:"#999", fontSize:10, fontFamily:"'Space Mono',monospace" }}>{movie.runtime}</span></>}
+
+        {/* RIGHT: sharp poster */}
+        <div style={{
+          flexShrink:0,
+          width:  isMobile ? 86  : 175,
+          height: isMobile ? 128 : 263,
+          borderRadius: isMobile ? 8 : 14,
+          overflow:"hidden",
+          border:"1px solid rgba(255,255,255,0.1)",
+          boxShadow: hov
+            ? "0 20px 48px rgba(0,0,0,0.95), 0 0 0 2px #F5C518"
+            : "0 12px 36px rgba(0,0,0,0.85)",
+          transition:"box-shadow 0.3s ease",
+        }}>
+          <img src={getPoster(movie.poster)} alt={movie.title}
+            style={{ width:"100%", height:"100%", objectFit:"cover", display:"block",
+              WebkitBackfaceVisibility:"hidden", backfaceVisibility:"hidden" }}
+            onError={e => { e.target.src="https://placehold.co/175x263/1a1a1a/F5C518?text=" + encodeURIComponent(movie.title); }} />
         </div>
-        {!isMobile && <p style={{ color:"#ccc", fontFamily:"'Lora',serif", fontSize:13, lineHeight:1.65, maxWidth:520, margin:"0 0 10px", fontStyle:"italic" }}>"{movie.review}"</p>}
-        {isMobile && <p style={{ color:"#ccc", fontFamily:"'Lora',serif", fontSize:11, lineHeight:1.5, margin:"0 0 6px", fontStyle:"italic", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>"{movie.review}"</p>}
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <StarRating score={movie.imdb} small={isMobile} />
-          <span style={{ color:"#555", fontFamily:"'Space Mono',monospace", fontSize: isMobile ? 9 : 10 }}>— {movie.reviewer}</span>
-        </div>
+
       </div>
     </div>
   );
@@ -226,7 +304,7 @@ const MovieModal = ({ movie, onClose, isMobile }) => {
         </div>
         {/* Top section: poster + basic info */}
         <div style={{ display:"flex", gap:14, padding:"14px 16px 0" }}>
-          <img src={movie.poster} alt={movie.title} style={{ width:100, borderRadius:10, objectFit:"cover", flexShrink:0 }}
+          <img src={getPoster(movie.poster)} alt={movie.title} style={{ width:100, borderRadius:10, objectFit:"cover", flexShrink:0 }}
             onError={e => { e.target.src=`https://placehold.co/100x150/1a1a1a/F5C518?text=?`; }} />
           <div style={{ flex:1, minWidth:0 }}>
             <h2 style={{ margin:"0 0 5px", color:"#fff", fontFamily:"'Anton',sans-serif", fontSize:20, lineHeight:1.1 }}>{movie.title}</h2>
@@ -250,6 +328,26 @@ const MovieModal = ({ movie, onClose, isMobile }) => {
           <p style={{ color:"#555", fontSize:8, fontFamily:"'Space Mono',monospace", letterSpacing:1, margin:"0 0 8px" }}>REVIEW</p>
           <p style={{ color:"#ccc", fontFamily:"'Lora',serif", fontSize:13, lineHeight:1.75, fontStyle:"italic", margin:"0 0 10px" }}>"{movie.review}"</p>
           <p style={{ color:"#444", fontSize:10, fontFamily:"'Space Mono',monospace", margin:"0 0 16px" }}>— {movie.reviewer}</p>
+
+          {/* ── OTT AVAILABILITY ── */}
+          {(movie.ott||[]).length > 0 && (
+            <div style={{ borderTop:"1px solid #1a1a1a", paddingTop:14, marginBottom:16 }}>
+              <p style={{ color:"#444", fontSize:8, fontFamily:"'Space Mono',monospace", letterSpacing:1, margin:"0 0 10px" }}>AVAILABLE ON</p>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                {(movie.ott||[]).map((url, i) => (
+                  <div key={i} style={{ width:40, height:40, borderRadius:10, overflow:"hidden",
+                    border:"1px solid #2a2a2a", background:"#1a1a1a",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    boxShadow:"0 4px 12px rgba(0,0,0,0.4)" }}>
+                    <img src={url} alt={`ott-${i}`}
+                      style={{ width:"100%", height:"100%", objectFit:"cover", borderRadius:9 }}
+                      onError={e => { e.target.style.display="none"; }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ borderTop:"1px solid #1a1a1a", paddingTop:12 }}>
             <p style={{ color:"#444", fontSize:8, fontFamily:"'Space Mono',monospace", letterSpacing:1, margin:"0 0 3px" }}>DIRECTOR</p>
             <p style={{ color:"#bbb", fontSize:13, fontFamily:"'Lora',serif", margin:0 }}>{movie.director}</p>
@@ -267,7 +365,7 @@ const MovieModal = ({ movie, onClose, isMobile }) => {
         style={{ background:"#0f0f0f", border:"1px solid #252525", borderRadius:18, maxWidth:680, width:"100%", overflow:"hidden", boxShadow:"0 40px 80px rgba(0,0,0,0.8)", animation:"modalIn 0.25s ease" }}>
         <div style={{ display:"flex" }}>
           <div style={{ width:220, flexShrink:0 }}>
-            <img src={movie.poster} alt={movie.title} style={{ width:"100%", height:"100%", objectFit:"cover", minHeight:340 }}
+            <img src={getPoster(movie.poster)} alt={movie.title} style={{ width:"100%", height:"100%", objectFit:"cover", minHeight:340 }}
               onError={e => { e.target.src=`https://placehold.co/220x340/1a1a1a/F5C518?text=${encodeURIComponent(movie.title)}`; }} />
           </div>
           <div style={{ flex:1, padding:"24px 24px 20px", display:"flex", flexDirection:"column" }}>
@@ -297,6 +395,28 @@ const MovieModal = ({ movie, onClose, isMobile }) => {
               <p style={{ color:"#444", fontSize:10, fontFamily:"'Space Mono',monospace" }}>— {movie.reviewer}</p>
             </div>
             <div style={{ borderTop:"1px solid #1a1a1a", paddingTop:12, marginTop:"auto" }}>
+
+              {/* ── OTT AVAILABILITY ── */}
+              {(movie.ott||[]).length > 0 && (
+                <div style={{ marginBottom:14 }}>
+                  <p style={{ color:"#444", fontSize:8, fontFamily:"'Space Mono',monospace", letterSpacing:1, margin:"0 0 10px" }}>AVAILABLE ON</p>
+                  <div style={{ display:"flex", gap:9, flexWrap:"wrap" }}>
+                    {(movie.ott||[]).map((url, i) => (
+                      <div key={i} style={{ width:44, height:44, borderRadius:11, overflow:"hidden",
+                        border:"1px solid #2a2a2a", background:"#1a1a1a",
+                        boxShadow:"0 4px 14px rgba(0,0,0,0.5)",
+                        transition:"transform 0.2s, box-shadow 0.2s" }}
+                        onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 8px 20px rgba(0,0,0,0.6)"; }}
+                        onMouseLeave={e=>{ e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.5)"; }}>
+                        <img src={url} alt={`ott-${i}`}
+                          style={{ width:"100%", height:"100%", objectFit:"cover", borderRadius:10 }}
+                          onError={e=>{ e.target.style.display="none"; }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <p style={{ color:"#444", fontSize:9, fontFamily:"'Space Mono',monospace", letterSpacing:1, margin:"0 0 3px" }}>DIRECTOR</p>
               <p style={{ color:"#bbb", fontSize:13, fontFamily:"'Lora',serif", margin:0 }}>{movie.director}</p>
             </div>
@@ -404,7 +524,7 @@ const MobileDrawer = ({ open, onClose, genres, years, movies, switchTab,
                 style={{ display:"flex", gap:10, alignItems:"center", padding:"8px 10px", borderRadius:8, cursor:"pointer", marginBottom:4, transition:"background 0.15s" }}
                 onMouseEnter={e=>e.currentTarget.style.background="#141414"}
                 onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                <img src={m.poster} alt={m.title}
+                <img src={getPoster(m.poster)} alt={m.title}
                   style={{ width:36, height:54, objectFit:"cover", borderRadius:5, flexShrink:0 }}
                   onError={e=>{e.target.src=`https://placehold.co/36x54/1a1a1a/F5C518?text=?`;}} />
                 <div style={{ minWidth:0 }}>
@@ -550,6 +670,13 @@ function App() {
       <link href="https://fonts.googleapis.com/css2?family=Anton&family=Lora:ital,wght@0,400;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
       <style>{`
         * { box-sizing:border-box; margin:0; padding:0; }
+        img {
+          -webkit-backface-visibility: hidden;
+          backface-visibility: hidden;
+          -webkit-transform: translateZ(0);
+          transform: translateZ(0);
+          image-rendering: -webkit-optimize-contrast;
+        }
         ::-webkit-scrollbar { width:4px; }
         ::-webkit-scrollbar-track { background:#0a0a0a; }
         ::-webkit-scrollbar-thumb { background:#222; border-radius:2px; }
@@ -754,10 +881,26 @@ function App() {
         <main style={{ flex:1, padding: isMobile?"14px 12px 24px":"22px 22px 40px", minWidth:0, animation:"fadeIn 0.4s ease" }}>
 
           {/* ── DEDICATED PAGES ──────────────────────────────────── */}
-          {activeTab === "top250"           && !loading && <Top250Page          movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile} />}
-          {activeTab === "most-popular"     && !loading && <MostPopularPage     movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile} />}
-          {activeTab === "new-releases"     && !loading && <NewReleasesPage     movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile} />}
-          {activeTab === "release-calendar" && !loading && <ReleaseCalendarPage movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile} />}
+          {activeTab === "top250"           && !loading && <Top250Page
+            movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile}
+            selectedGenre={selectedGenre} setSelectedGenre={setSelectedGenre}
+            selectedYear={selectedYear} setSelectedYear={setSelectedYear}
+            selectedRating={selectedRating} setSelectedRating={setSelectedRating} />}
+          {activeTab === "most-popular"     && !loading && <MostPopularPage
+            movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile}
+            selectedGenre={selectedGenre} setSelectedGenre={setSelectedGenre}
+            selectedYear={selectedYear} setSelectedYear={setSelectedYear}
+            selectedRating={selectedRating} setSelectedRating={setSelectedRating} />}
+          {activeTab === "new-releases"     && !loading && <NewReleasesPage
+            movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile}
+            selectedGenre={selectedGenre} setSelectedGenre={setSelectedGenre}
+            selectedYear={selectedYear} setSelectedYear={setSelectedYear}
+            selectedRating={selectedRating} setSelectedRating={setSelectedRating} />}
+          {activeTab === "release-calendar" && !loading && <ReleaseCalendarPage
+            movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile}
+            selectedGenre={selectedGenre} setSelectedGenre={setSelectedGenre}
+            selectedYear={selectedYear} setSelectedYear={setSelectedYear}
+            selectedRating={selectedRating} setSelectedRating={setSelectedRating} />}
 
           {/* ── HOME / TOP-RATED page content ────────────────────── */}
           {(activeTab === "home" || activeTab === "top-rated") && (<>
