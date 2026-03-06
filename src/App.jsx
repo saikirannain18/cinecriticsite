@@ -1,4 +1,5 @@
 import { useState, useEffect, Component } from "react";
+import { Top250Page, MostPopularPage, NewReleasesPage, ReleaseCalendarPage } from "./MoviePages";
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDi9KTtfyOHY8McVA1ObzloNOekGY_tgfI",
@@ -306,29 +307,126 @@ const MovieModal = ({ movie, onClose, isMobile }) => {
   );
 };
 
-// ── FILTER DRAWER (mobile) ────────────────────────────────────────────
-const FilterDrawer = ({ open, onClose, genres, years, selectedGenre, setSelectedGenre, selectedYear, setSelectedYear, selectedRating, setSelectedRating }) => {
+// ── MOBILE DRAWER (hamburger) — filters on top, movies list below ─────
+const MobileDrawer = ({ open, onClose, genres, years, movies, switchTab,
+  selectedGenre, setSelectedGenre, selectedYear, setSelectedYear,
+  selectedRating, setSelectedRating, onMovieClick }) => {
   if (!open) return null;
-  const SideItem = ({ label, active, onClick }) => (
-    <div onClick={() => { onClick(); }} style={{ padding:"8px 12px", borderRadius:6, cursor:"pointer", marginBottom:2, background: active?"#F5C51815":"transparent", borderLeft: active?"2px solid #F5C518":"2px solid transparent", color: active?"#F5C518":"#888", fontSize:12, fontFamily:"'Space Mono',monospace" }}>{label}</div>
+
+  const Item = ({ label, active, onClick }) => (
+    <div onClick={onClick} style={{ padding:"9px 14px", borderRadius:7, cursor:"pointer", marginBottom:2,
+      background: active?"#F5C51815":"transparent",
+      borderLeft: active?"2px solid #F5C518":"2px solid transparent",
+      color: active?"#F5C518":"#999", fontSize:12, fontFamily:"'Space Mono',monospace" }}>
+      {label}
+    </div>
   );
+
   return (
-    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:1500, background:"rgba(0,0,0,0.7)", backdropFilter:"blur(6px)" }}>
-      <div onClick={e => e.stopPropagation()} style={{ position:"absolute", left:0, top:0, bottom:0, width:240, background:"#0c0c0c", borderRight:"1px solid #1e1e1e", overflowY:"auto", animation:"slideRight 0.25s ease" }}>
-        <div style={{ padding:"16px 14px", borderBottom:"1px solid #1a1a1a", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <span style={{ fontFamily:"'Anton',sans-serif", fontSize:16, letterSpacing:1, color:"#fff" }}>FILTERS</span>
-          <button onClick={onClose} style={{ background:"none", border:"1px solid #2a2a2a", color:"#666", cursor:"pointer", borderRadius:"50%", width:28, height:28, fontSize:14 }}>✕</button>
+    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:1500, background:"rgba(0,0,0,0.75)", backdropFilter:"blur(6px)" }}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{ position:"absolute", left:0, top:0, bottom:0, width:"80%", maxWidth:300,
+          background:"#0a0a0a", borderRight:"1px solid #1e1e1e",
+          display:"flex", flexDirection:"column", animation:"slideRight 0.25s ease" }}>
+
+        {/* Header */}
+        <div style={{ padding:"14px 16px", borderBottom:"1px solid #1a1a1a", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+            <div style={{ width:22, height:22, background:"#F5C518", borderRadius:5, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11 }}>🎬</div>
+            <span style={{ fontFamily:"'Anton',sans-serif", fontSize:17, letterSpacing:2 }}>CINE<span style={{ color:"#F5C518" }}>CRITIC</span></span>
+          </div>
+          <button onClick={onClose} style={{ background:"none", border:"1px solid #2a2a2a", color:"#666", cursor:"pointer", borderRadius:"50%", width:28, height:28, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
         </div>
-        <div style={{ padding:"16px 14px" }}>
-          <p style={{ color:"#333", fontSize:8, letterSpacing:2, fontFamily:"'Space Mono',monospace", marginBottom:8 }}>GENRE</p>
-          {genres.map(g => <SideItem key={g} label={g} active={selectedGenre===g} onClick={() => setSelectedGenre(g)} />)}
-          <p style={{ color:"#333", fontSize:8, letterSpacing:2, fontFamily:"'Space Mono',monospace", margin:"20px 0 8px" }}>YEAR</p>
-          {years.map(y => <SideItem key={y} label={y} active={selectedYear===y} onClick={() => setSelectedYear(y)} />)}
-          <p style={{ color:"#333", fontSize:8, letterSpacing:2, fontFamily:"'Space Mono',monospace", margin:"20px 0 8px" }}>IMDb RATING</p>
-          {RATINGS_FILTER.map(r => <SideItem key={r} label={r==="All"?"All Ratings":`⭐ ${r}`} active={selectedRating===r} onClick={() => setSelectedRating(r)} />)}
+
+        {/* Scrollable content */}
+        <div style={{ overflowY:"auto", flex:1 }}>
+
+          {/* ── NAV TABS SECTION ── */}
+          <div style={{ padding:"12px 14px", borderBottom:"1px solid #111" }}>
+            <p style={{ color:"#F5C518", fontSize:8, letterSpacing:2, fontFamily:"'Anton',sans-serif", marginBottom:10 }}>NAVIGATE</p>
+            {[
+              { icon:"🏠", label:"Home",             tab:"home" },
+              { icon:"⭐", label:"Top Rated",        tab:"top-rated" },
+              { icon:"🆕", label:"New Releases",     tab:"new-releases" },
+            ].map(({icon,label,tab})=>(
+              <div key={tab} onClick={()=>{ switchTab(tab); onClose(); }}
+                style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", borderRadius:8, cursor:"pointer", marginBottom:3,
+                  background: "transparent", borderLeft: "2px solid transparent", transition:"all 0.15s" }}
+                onMouseEnter={e=>e.currentTarget.style.background="#141414"}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <span style={{ fontSize:16 }}>{icon}</span>
+                <span style={{ color:"#ccc", fontSize:13, fontFamily:"'Space Mono',monospace" }}>{label}</span>
+              </div>
+            ))}
+
+            {/* Divider */}
+            <div style={{ height:1, background:"#1a1a1a", margin:"8px 0" }} />
+
+            {/* Dedicated pages */}
+            <p style={{ color:"#333", fontSize:7, letterSpacing:2, fontFamily:"'Space Mono',monospace", margin:"10px 0 8px" }}>EXPLORE</p>
+            {[
+              { icon:"🏆", label:"Top 250 Movies",    tab:"top250",           color:"#F5C518" },
+              { icon:"🌟", label:"Most Popular",       tab:"most-popular",     color:"#a78bfa" },
+              { icon:"📅", label:"Release Calendar",   tab:"release-calendar", color:"#4caf50" },
+            ].map(({icon,label,tab,color})=>(
+              <div key={tab} onClick={()=>{ switchTab(tab); onClose(); }}
+                style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", borderRadius:8, cursor:"pointer", marginBottom:3, transition:"background 0.15s" }}
+                onMouseEnter={e=>e.currentTarget.style.background="#141414"}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <span style={{ fontSize:16 }}>{icon}</span>
+                <span style={{ color, fontSize:13, fontFamily:"'Space Mono',monospace" }}>{label}</span>
+                <span style={{ marginLeft:"auto", background:`${color}20`, border:`1px solid ${color}40`, color, fontSize:7, borderRadius:4, padding:"2px 6px", fontFamily:"'Space Mono',monospace" }}>PAGE</span>
+              </div>
+            ))}
+          </div>
+
+          {/* ── FILTERS SECTION ── */}
+          <div style={{ padding:"16px 14px", borderBottom:"1px solid #111" }}>
+            <p style={{ color:"#F5C518", fontSize:8, letterSpacing:2, fontFamily:"'Anton',sans-serif", marginBottom:12 }}>BROWSE & FILTER</p>
+
+            <p style={{ color:"#333", fontSize:7, letterSpacing:2, fontFamily:"'Space Mono',monospace", marginBottom:6 }}>GENRE</p>
+            {genres.map(g=><Item key={g} label={g} active={selectedGenre===g} onClick={()=>setSelectedGenre(g)} />)}
+
+            <p style={{ color:"#333", fontSize:7, letterSpacing:2, fontFamily:"'Space Mono',monospace", margin:"14px 0 6px" }}>YEAR</p>
+            {years.map(y=><Item key={y} label={y} active={selectedYear===y} onClick={()=>setSelectedYear(y)} />)}
+
+            <p style={{ color:"#333", fontSize:7, letterSpacing:2, fontFamily:"'Space Mono',monospace", margin:"14px 0 6px" }}>IMDb RATING</p>
+            {RATINGS_FILTER.map(r=><Item key={r} label={r==="All"?"All Ratings":`⭐ ${r}`} active={selectedRating===r} onClick={()=>setSelectedRating(r)} />)}
+          </div>
+
+          {/* ── MOVIES LIST SECTION ── */}
+          <div style={{ padding:"16px 14px 32px" }}>
+            <p style={{ color:"#F5C518", fontSize:8, letterSpacing:2, fontFamily:"'Anton',sans-serif", marginBottom:12 }}>
+              ALL MOVIES <span style={{ color:"#444", fontSize:7 }}>({movies.length})</span>
+            </p>
+            {movies.map(m => (
+              <div key={m.id} onClick={()=>{ onMovieClick(m); onClose(); }}
+                style={{ display:"flex", gap:10, alignItems:"center", padding:"8px 10px", borderRadius:8, cursor:"pointer", marginBottom:4, transition:"background 0.15s" }}
+                onMouseEnter={e=>e.currentTarget.style.background="#141414"}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <img src={m.poster} alt={m.title}
+                  style={{ width:36, height:54, objectFit:"cover", borderRadius:5, flexShrink:0 }}
+                  onError={e=>{e.target.src=`https://placehold.co/36x54/1a1a1a/F5C518?text=?`;}} />
+                <div style={{ minWidth:0 }}>
+                  <p style={{ fontFamily:"'Anton',sans-serif", fontSize:12, color:"#fff", margin:"0 0 2px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.title}</p>
+                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    <span style={{ color:"#F5C518", fontSize:9, fontFamily:"'Space Mono',monospace" }}>{m.year}</span>
+                    <span style={{ color:"#333", fontSize:8 }}>·</span>
+                    <span style={{ background:"#F5C518", borderRadius:3, padding:"0px 4px", fontSize:7, color:"#000", fontFamily:"'Anton',sans-serif" }}>IMDb {m.imdb}</span>
+                  </div>
+                </div>
+                {m.featured && <span style={{ marginLeft:"auto", fontSize:8, color:"#F5C518", flexShrink:0 }}>★</span>}
+              </div>
+            ))}
+          </div>
+
         </div>
-        <div style={{ padding:"0 14px 24px" }}>
-          <button onClick={onClose} style={{ width:"100%", background:"#F5C518", border:"none", color:"#000", padding:"12px 0", borderRadius:10, cursor:"pointer", fontFamily:"'Anton',sans-serif", fontSize:14, letterSpacing:1 }}>APPLY FILTERS</button>
+
+        {/* Apply button */}
+        <div style={{ padding:"12px 14px", borderTop:"1px solid #1a1a1a", flexShrink:0 }}>
+          <button onClick={onClose} style={{ width:"100%", background:"#F5C518", border:"none", color:"#000", padding:"12px 0", borderRadius:10, cursor:"pointer", fontFamily:"'Anton',sans-serif", fontSize:14, letterSpacing:1 }}>
+            APPLY & CLOSE
+          </button>
         </div>
       </div>
     </div>
@@ -353,6 +451,8 @@ function App() {
   const [sidebarOpen,    setSidebarOpen]    = useState(false);
   const [filterDrawer,   setFilterDrawer]   = useState(false);
   const [searchOpen,     setSearchOpen]     = useState(false);
+  const [activeTab,      setActiveTab]      = useState("home"); // "home"|"top-rated"|"new-releases"|"top250"|"most-popular"|"release-calendar"
+  const [moreOpen,       setMoreOpen]       = useState(false);
 
   // Detect mobile
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -405,7 +505,8 @@ function App() {
   const genres  = ["All", ...Array.from(new Set(movies.flatMap(m=>m.genre||[]))).sort()];
   const years   = ["All", ...Array.from(new Set(movies.map(m=>String(m.year)))).sort((a,b)=>b-a)];
 
-  const filtered = movies.filter(m => {
+  // Base filter (sidebar/search filters)
+  const baseFiltered = movies.filter(m => {
     if (selectedGenre!=="All" && !(m.genre||[]).includes(selectedGenre)) return false;
     if (selectedYear!=="All"  && String(m.year)!==selectedYear) return false;
     if (selectedRating!=="All") { if (m.imdb < parseFloat(selectedRating)) return false; }
@@ -414,6 +515,19 @@ function App() {
     return true;
   });
 
+  // Apply tab-specific sorting on top of filters
+  const filtered = (() => {
+    if (activeTab === "top-rated")    return [...baseFiltered].sort((a,b) => b.imdb - a.imdb);
+    if (activeTab === "new-releases") return [...baseFiltered].sort((a,b) => b.year - a.year);
+    return baseFiltered; // home — default order
+  })();
+
+  // Helper: switch tab and clear filters
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    clearFilters();
+  };
+
   const SideItem = ({ label, active, onClick }) => (
     <div onClick={onClick} style={{ padding:"6px 10px", borderRadius:5, cursor:"pointer", marginBottom:2, background:active?"#F5C51812":"transparent", borderLeft:active?"2px solid #F5C518":"2px solid transparent", color:active?"#F5C518":"#666", fontSize:10, fontFamily:"'Space Mono',monospace", transition:"all 0.15s" }}>{label}</div>
   );
@@ -421,6 +535,15 @@ function App() {
   const clearFilters = () => { setSelectedGenre("All"); setSelectedYear("All"); setSelectedRating("All"); setSearch(""); };
   const hasFilters   = selectedGenre!=="All"||selectedYear!=="All"||selectedRating!=="All"||search;
   const activeFilterCount = [selectedGenre!=="All", selectedYear!=="All", selectedRating!=="All", !!search].filter(Boolean).length;
+
+  // Section title based on active tab + filters
+  const sectionTitle = () => {
+    if (search) return `Results for "${search}"`;
+    if (selectedGenre !== "All") return selectedGenre.toUpperCase();
+    if (activeTab === "top-rated")    return "TOP RATED";
+    if (activeTab === "new-releases") return "NEW RELEASES";
+    return "ALL MOVIES";
+  };
 
   return (
     <div style={{ minHeight:"100vh", background:"#080808", color:"#fff" }}>
@@ -447,7 +570,7 @@ function App() {
         height: isMobile ? 54 : 60,
         display:"flex", alignItems:"center", justifyContent:"space-between", gap:10,
       }}>
-        {/* Left: hamburger + logo */}
+        {/* Left: logo */}
         <div style={{ display:"flex", alignItems:"center", gap: isMobile ? 8 : 12, flexShrink:0 }}>
           {!isMobile && (
             <button onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:"none", color:"#F5C518", cursor:"pointer", fontSize:19 }}>☰</button>
@@ -458,36 +581,121 @@ function App() {
           </div>
         </div>
 
-        {/* Middle: search (desktop always visible, mobile toggle) */}
-        {!isMobile ? (
+        {/* Middle: search bar - desktop always visible */}
+        {!isMobile && (
           <div style={{ display:"flex", gap:7, background:"#111", border:"1px solid #1e1e1e", borderRadius:8, padding:"6px 12px", alignItems:"center", flex:1, maxWidth:300 }}>
             <span style={{ color:"#444", fontSize:14 }}>🔍</span>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search movies, directors..."
               style={{ background:"none", border:"none", outline:"none", color:"#ccc", fontFamily:"'Space Mono',monospace", fontSize:10, width:"100%" }} />
             {search && <span onClick={()=>setSearch("")} style={{ color:"#444", cursor:"pointer", fontSize:12 }}>✕</span>}
           </div>
-        ) : searchOpen ? (
-          <div style={{ display:"flex", gap:7, background:"#111", border:"1px solid #1e1e1e", borderRadius:8, padding:"6px 10px", alignItems:"center", flex:1 }}>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." autoFocus
-              style={{ background:"none", border:"none", outline:"none", color:"#ccc", fontFamily:"'Space Mono',monospace", fontSize:11, width:"100%" }} />
-            <span onClick={()=>{setSearch("");setSearchOpen(false);}} style={{ color:"#444", cursor:"pointer", fontSize:13 }}>✕</span>
-          </div>
-        ) : null}
+        )}
 
         {/* Right */}
-        <div style={{ display:"flex", gap: isMobile?8:16, alignItems:"center", flexShrink:0 }}>
+        <div style={{ display:"flex", gap: isMobile?4:16, alignItems:"center", flexShrink:0 }}>
           {isMobile ? (
             <>
-              {!searchOpen && <button onClick={()=>setSearchOpen(true)} style={{ background:"none", border:"none", color:"#888", cursor:"pointer", fontSize:18, lineHeight:1 }}>🔍</button>}
-              <button onClick={()=>setFilterDrawer(true)} style={{ background: activeFilterCount>0?"#F5C51820":"#111", border:`1px solid ${activeFilterCount>0?"#F5C51880":"#222"}`, color: activeFilterCount>0?"#F5C518":"#888", cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:11, fontFamily:"'Space Mono',monospace", display:"flex", alignItems:"center", gap:5 }}>
-                ⚙ {activeFilterCount>0 && <span style={{ background:"#F5C518", color:"#000", borderRadius:"50%", width:16, height:16, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:700 }}>{activeFilterCount}</span>}
+              {/* Home icon */}
+              <button onClick={()=>{ switchTab("home"); setSearchOpen(false); }}
+                style={{ background:"none", border:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"4px 8px" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill={activeTab==="home"?"#F5C518":"#555"} stroke="none">
+                  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                </svg>
+              </button>
+
+              {/* Search icon */}
+              <button onClick={()=>setSearchOpen(o=>!o)}
+                style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 8px" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={searchOpen?"#F5C518":"#555"} strokeWidth="2.5" strokeLinecap="round">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </button>
+
+              {/* Hamburger ☰ */}
+              <button onClick={()=>setFilterDrawer(true)}
+                style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 8px", position:"relative" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={activeFilterCount>0?"#F5C518":"#888"} strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="3" y1="6"  x2="21" y2="6"/>
+                  <line x1="3" y1="12" x2="21" y2="12"/>
+                  <line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+                {activeFilterCount>0 && (
+                  <span style={{ position:"absolute", top:2, right:4, background:"#F5C518", color:"#000", borderRadius:"50%", width:14, height:14, display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, fontWeight:700 }}>{activeFilterCount}</span>
+                )}
               </button>
             </>
           ) : (
             <>
-              {["Home","Top Rated","New Releases"].map(n=>(
-                <span key={n} style={{ color:n==="Home"?"#F5C518":"#666", fontSize:10, cursor:"pointer", fontFamily:"'Space Mono',monospace" }}>{n}</span>
+              {[["home","Home"],["top-rated","Top Rated"],["new-releases","New Releases"]].map(([tab,label])=>(
+                <span key={tab} onClick={()=>switchTab(tab)} style={{
+                  color: activeTab===tab ? "#F5C518" : "#666",
+                  fontSize:10, cursor:"pointer", fontFamily:"'Space Mono',monospace",
+                  borderBottom: activeTab===tab ? "1px solid #F5C518" : "1px solid transparent",
+                  paddingBottom:2, transition:"all 0.2s",
+                }}>{label}</span>
               ))}
+
+              {/* MORE DROPDOWN */}
+              <div style={{ position:"relative" }}>
+                <span
+                  onClick={() => setMoreOpen(o => !o)}
+                  style={{
+                    color: moreOpen ? "#F5C518" : "#666",
+                    fontSize:10, cursor:"pointer", fontFamily:"'Space Mono',monospace",
+                    display:"flex", alignItems:"center", gap:4,
+                    borderBottom: moreOpen ? "1px solid #F5C518" : "1px solid transparent",
+                    paddingBottom:2, userSelect:"none",
+                  }}>
+                  More {moreOpen ? "▲" : "▼"}
+                </span>
+
+                {/* Dropdown panel */}
+                {moreOpen && (
+                  <>
+                    {/* Click-outside backdrop */}
+                    <div onClick={() => setMoreOpen(false)} style={{ position:"fixed", inset:0, zIndex:299 }} />
+
+                    <div style={{
+                      position:"absolute", top:"calc(100% + 14px)", right:0, zIndex:300,
+                      background:"#0f0f0f", border:"1px solid #222", borderRadius:12,
+                      minWidth:220, overflow:"hidden",
+                      boxShadow:"0 20px 48px rgba(0,0,0,0.8)",
+                      animation:"modalIn 0.18s ease",
+                    }}>
+                      {/* Header */}
+                      <div style={{ padding:"12px 16px 10px", borderBottom:"1px solid #1a1a1a" }}>
+                        <p style={{ color:"#333", fontSize:8, letterSpacing:2, fontFamily:"'Space Mono',monospace", margin:0 }}>EXPLORE</p>
+                      </div>
+
+                      {/* Links */}
+                      {[
+                        { icon:"🏆", label:"Top 250 Movies",    tab:"top250" },
+                        { icon:"📅", label:"Release Calendar",  tab:"release-calendar" },
+                        { icon:"🌟", label:"Most Popular",       tab:"most-popular" },
+                        { icon:"🆕", label:"New Releases",       tab:"new-releases" },
+                      ].map(({ icon, label, tab }) => (
+                        <div key={label} onClick={()=>{ switchTab(tab); setMoreOpen(false); }}
+                          style={{
+                            display:"flex", alignItems:"center", gap:12,
+                            padding:"11px 16px", cursor:"pointer",
+                            borderBottom:"1px solid #111", transition:"background 0.15s",
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background="#1a1a1a"}
+                          onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                          <span style={{ fontSize:15 }}>{icon}</span>
+                          <span style={{ color:"#ccc", fontSize:11, fontFamily:"'Space Mono',monospace" }}>{label}</span>
+                          <span style={{ marginLeft:"auto", color:"#333", fontSize:10 }}>→</span>
+                        </div>
+                      ))}
+
+                      {/* Footer note */}
+                      <div style={{ padding:"10px 16px" }}>
+                        <p style={{ color:"#333", fontSize:8, fontFamily:"'Space Mono',monospace", margin:0 }}>Links open IMDb in a new tab</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </>
           )}
           {dataSource!=="loading" && (
@@ -499,11 +707,26 @@ function App() {
         </div>
       </nav>
 
-      {/* ── MOBILE FILTER DRAWER ─────────────────────────────────────── */}
-      <FilterDrawer open={filterDrawer} onClose={()=>setFilterDrawer(false)} genres={genres} years={years}
+      {/* ── MOBILE SEARCH BAR (drops below navbar when open) ─────────── */}
+      {isMobile && searchOpen && (
+        <div style={{ background:"#0d0d0d", borderBottom:"1px solid #1a1a1a", padding:"10px 14px", display:"flex", gap:8, alignItems:"center", animation:"fadeIn 0.2s ease" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5" strokeLinecap="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search movies, directors..." autoFocus
+            style={{ background:"none", border:"none", outline:"none", color:"#ccc", fontFamily:"'Space Mono',monospace", fontSize:12, flex:1 }} />
+          {search && <span onClick={()=>setSearch("")} style={{ color:"#444", cursor:"pointer", fontSize:13 }}>✕</span>}
+          <span onClick={()=>{ setSearch(""); setSearchOpen(false); }} style={{ color:"#555", cursor:"pointer", fontSize:11, fontFamily:"'Space Mono',monospace" }}>Done</span>
+        </div>
+      )}
+
+      {/* ── MOBILE DRAWER (hamburger) ────────────────────────────────── */}
+      <MobileDrawer open={filterDrawer} onClose={()=>setFilterDrawer(false)}
+        genres={genres} years={years} movies={movies} switchTab={switchTab}
         selectedGenre={selectedGenre} setSelectedGenre={setSelectedGenre}
         selectedYear={selectedYear} setSelectedYear={setSelectedYear}
-        selectedRating={selectedRating} setSelectedRating={setSelectedRating} />
+        selectedRating={selectedRating} setSelectedRating={setSelectedRating}
+        onMovieClick={setSelectedMovie} />
 
       <div style={{ display:"flex" }}>
 
@@ -528,11 +751,40 @@ function App() {
         )}
 
         {/* ── MAIN ─────────────────────────────────────────────────── */}
-        <main style={{ flex:1, padding: isMobile?"14px 12px 80px":"22px 22px 40px", minWidth:0, animation:"fadeIn 0.4s ease" }}>
+        <main style={{ flex:1, padding: isMobile?"14px 12px 24px":"22px 22px 40px", minWidth:0, animation:"fadeIn 0.4s ease" }}>
 
-          {/* Hero */}
-          {!loading && featured.length>0 && (
+          {/* ── DEDICATED PAGES ──────────────────────────────────── */}
+          {activeTab === "top250"           && !loading && <Top250Page          movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile} />}
+          {activeTab === "most-popular"     && !loading && <MostPopularPage     movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile} />}
+          {activeTab === "new-releases"     && !loading && <NewReleasesPage     movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile} />}
+          {activeTab === "release-calendar" && !loading && <ReleaseCalendarPage movies={movies} onMovieClick={setSelectedMovie} isMobile={isMobile} />}
+
+          {/* ── HOME / TOP-RATED page content ────────────────────── */}
+          {(activeTab === "home" || activeTab === "top-rated") && (<>
+          {!loading && activeTab === "home" && featured.length>0 && (
             <HeroBanner movie={featured[heroIndex%featured.length]} onClick={setSelectedMovie} isMobile={isMobile} />
+          )}
+
+          {/* Top Rated page header */}
+          {!loading && activeTab === "top-rated" && (
+            <div style={{ marginBottom: isMobile?16:22, padding: isMobile?"14px":"20px 24px", background:"linear-gradient(135deg, #0d0d00, #1a1200)", border:"1px solid #F5C51830", borderRadius:12 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                <span style={{ fontSize: isMobile?24:32 }}>⭐</span>
+                <h1 style={{ fontFamily:"'Anton',sans-serif", fontSize: isMobile?22:32, letterSpacing:2, color:"#F5C518", margin:0 }}>TOP RATED</h1>
+              </div>
+              <p style={{ color:"#666", fontSize: isMobile?10:11, fontFamily:"'Space Mono',monospace", margin:0 }}>Ranked by IMDb score — the highest rated films in the collection</p>
+            </div>
+          )}
+
+          {/* New Releases page header */}
+          {!loading && activeTab === "new-releases" && (
+            <div style={{ marginBottom: isMobile?16:22, padding: isMobile?"14px":"20px 24px", background:"linear-gradient(135deg, #001a0d, #001a0d)", border:"1px solid #4caf5030", borderRadius:12 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                <span style={{ fontSize: isMobile?24:32 }}>🆕</span>
+                <h1 style={{ fontFamily:"'Anton',sans-serif", fontSize: isMobile?22:32, letterSpacing:2, color:"#4caf50", margin:0 }}>NEW RELEASES</h1>
+              </div>
+              <p style={{ color:"#666", fontSize: isMobile?10:11, fontFamily:"'Space Mono',monospace", margin:0 }}>Most recent films first — sorted by release year</p>
+            </div>
           )}
 
           {/* Demo banner */}
@@ -551,8 +803,7 @@ function App() {
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: isMobile?12:16 }}>
             <div>
               <h2 style={{ fontFamily:"'Anton',sans-serif", fontSize: isMobile?17:20, letterSpacing:1, color:"#fff" }}>
-                {selectedGenre!=="All" ? selectedGenre.toUpperCase() : "ALL MOVIES"}
-                {search && <span style={{ color:"#F5C518" }}> · "{search}"</span>}
+                {sectionTitle()}
               </h2>
               {!loading && <p style={{ color:"#444", fontSize:9, fontFamily:"'Space Mono',monospace", marginTop:2 }}>{filtered.length} titles</p>}
             </div>
@@ -577,6 +828,7 @@ function App() {
               {filtered.map(m=><MovieCard key={m.id} movie={m} onClick={setSelectedMovie} isMobile={isMobile} />)}
             </div>
           )}
+          </>)}
         </main>
       </div>
 
@@ -584,18 +836,6 @@ function App() {
       {selectedMovie && <MovieModal movie={selectedMovie} onClose={()=>setSelectedMovie(null)} isMobile={isMobile} />}
 
       {/* ── MOBILE BOTTOM NAV ────────────────────────────────────────── */}
-      {isMobile && (
-        <nav style={{ position:"fixed", bottom:0, left:0, right:0, zIndex:100, background:"rgba(8,8,8,0.98)", borderTop:"1px solid #1a1a1a", height:58, display:"flex", alignItems:"center", justifyContent:"space-around", backdropFilter:"blur(16px)" }}>
-          {[["🏠","Home"],["⭐","Top"],["🎬","New"],["🔍","Search"]].map(([icon,label])=>(
-            <button key={label} onClick={()=>{ if(label==="Search") setSearchOpen(o=>!o); }}
-              style={{ background:"none", border:"none", color: label==="Home"?"#F5C518":"#555", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3, padding:"6px 12px" }}>
-              <span style={{ fontSize:18 }}>{icon}</span>
-              <span style={{ fontSize:8, fontFamily:"'Space Mono',monospace" }}>{label}</span>
-            </button>
-          ))}
-        </nav>
-      )}
-
       {/* Footer (desktop only) */}
       {!isMobile && (
         <footer style={{ borderTop:"1px solid #0f0f0f", padding:"18px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", background:"#050505" }}>
