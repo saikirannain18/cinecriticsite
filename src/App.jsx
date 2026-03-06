@@ -5,14 +5,20 @@ import { useState, useEffect, Component } from "react";
 // Replace these values with YOUR project's config from:
 // console.firebase.google.com → Project Settings → Your Apps
 // ─────────────────────────────────────────────────────────────────────
+// Import the functions you need from the SDKs you need
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
 const FIREBASE_CONFIG = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT.firebaseapp.com",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId:             "YOUR_APP_ID",
+  apiKey: "AIzaSyDi9KTtfyOHY8McVA1ObzloNOekGY_tgfI",
+  authDomain: "cinecriticdb.firebaseapp.com",
+  projectId: "cinecriticdb",
+  storageBucket: "cinecriticdb.firebasestorage.app",
+  messagingSenderId: "855382839651",
+  appId: "1:855382839651:web:e9fa724bd796e7af258356"
 };
+// Initialize Firebase
 
 // ─────────────────────────────────────────────────────────────────────
 // FALLBACK DATA — always shown if Firebase is down / not configured /
