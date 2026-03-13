@@ -231,17 +231,21 @@ const TABS = [
 ];
 
 function Dashboard({ admin, onLogout }) {
-  const [tab,     setTab]     = useState("overview");
-  const [movies,  setMovies]  = useState([]);
+  const [tab,       setTab]       = useState("overview");
+  const [movies,    setMovies]    = useState([]);
   const [ottPlatforms, setOttPlatforms] = useState([]);
   const [analytics, setAnalytics] = useState({ totalVisits:0, todayVisits:0, topMovies:[] });
-  const [dbStatus, setDbStatus] = useState("checking"); // checking | live | error
+  const [dbStatus,  setDbStatus]  = useState("checking");
+  const [navOpen,   setNavOpen]   = useState(false); // mobile sidebar toggle
+  const isMobile = useWindowWidth() < 768;
 
-  // Load movies
+  // Close nav when tab changes on mobile
+  const changeTab = (id) => { setTab(id); if (isMobile) setNavOpen(false); };
+
   useEffect(() => {
     (async () => {
       try {
-        const fb   = await getFirebase();
+        const fb = await getFirebase();
         fb.onSnapshot(fb.collection(fb.fs, "movies"), snap => {
           setMovies(snap.docs.map(d => ({ id: d.id, ...d.data() })));
           setDbStatus("live");
@@ -250,7 +254,6 @@ function Dashboard({ admin, onLogout }) {
     })();
   }, []);
 
-  // Load OTT platforms
   useEffect(() => {
     (async () => {
       try {
@@ -261,7 +264,6 @@ function Dashboard({ admin, onLogout }) {
     })();
   }, []);
 
-  // Load analytics
   useEffect(() => {
     (async () => {
       try {
@@ -270,68 +272,110 @@ function Dashboard({ admin, onLogout }) {
         const data = {};
         snap.docs.forEach(d => { data[d.id] = d.data(); });
         const today = new Date().toISOString().slice(0,10);
-        setAnalytics({
-          totalVisits:  data.visits?.total || 0,
-          todayVisits:  data.visits?.daily?.[today] || 0,
-          topMovies:    data.topMovies?.list || [],
-        });
+        setAnalytics({ totalVisits: data.visits?.total||0, todayVisits: data.visits?.daily?.[today]||0, topMovies: data.topMovies?.list||[] });
       } catch {}
     })();
   }, []);
 
+  const activeTab = TABS.find(t => t.id === tab);
+
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column" }}>
-      {/* Top Bar */}
-      <header style={{ background: C.surface, borderBottom:`1px solid ${C.border}`, padding:"0 24px", height:52, display:"flex", alignItems:"center", gap:16, flexShrink:0 }}>
+      {/* ── TOP BAR ── */}
+      <header style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"0 16px", height:52, display:"flex", alignItems:"center", gap:12, flexShrink:0, position:"sticky", top:0, zIndex:100 }}>
+        {/* Hamburger (mobile only) */}
+        {isMobile && (
+          <button onClick={() => setNavOpen(o => !o)}
+            style={{ background:"none", border:"none", cursor:"pointer", padding:6, display:"flex", flexDirection:"column", gap:4 }}>
+            <span style={{ display:"block", width:20, height:2, background: navOpen ? C.yellow : C.sub, borderRadius:2, transition:"all .2s", transform: navOpen ? "rotate(45deg) translateY(6px)" : "none" }} />
+            <span style={{ display:"block", width:20, height:2, background: navOpen ? "transparent" : C.sub, borderRadius:2, transition:"all .2s" }} />
+            <span style={{ display:"block", width:20, height:2, background: navOpen ? C.yellow : C.sub, borderRadius:2, transition:"all .2s", transform: navOpen ? "rotate(-45deg) translateY(-6px)" : "none" }} />
+          </button>
+        )}
+
+        {/* Logo */}
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <div style={{ width:28, height:28, background:C.yellow, borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>🎬</div>
-          <span style={{ fontFamily:display, fontSize:18, letterSpacing:2 }}>CINE<span style={{color:C.yellow}}>CRITIC</span></span>
-          <span style={{ color:"#222", fontSize:10, marginLeft:4 }}>/ ADMIN</span>
+          <div style={{ width:26, height:26, background:C.yellow, borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13 }}>🎬</div>
+          <span style={{ fontFamily:display, fontSize:16, letterSpacing:2 }}>CINE<span style={{color:C.yellow}}>CRITIC</span></span>
+          {!isMobile && <span style={{ color:"#333", fontSize:10, marginLeft:2 }}>/ ADMIN</span>}
         </div>
 
-        {/* DB Status pill */}
-        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:16 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6, background:"#0a0a0a", border:`1px solid ${C.border2}`, borderRadius:20, padding:"4px 12px" }}>
-            <span className={dbStatus==="checking" ? "pulse" : ""} style={{ width:7, height:7, borderRadius:"50%", background: dbStatus==="live" ? C.green : dbStatus==="error" ? C.red : C.orange, display:"inline-block" }} />
-            <span style={{ fontSize:9, color: dbStatus==="live" ? C.green : dbStatus==="error" ? C.red : C.orange, letterSpacing:1 }}>
-              {dbStatus==="live" ? "DB LIVE" : dbStatus==="error" ? "DB ERROR" : "CONNECTING"}
-            </span>
+        {/* Right side */}
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:isMobile?8:14 }}>
+          {/* DB pill */}
+          <div style={{ display:"flex", alignItems:"center", gap:5, background:"#0a0a0a", border:`1px solid ${C.border2}`, borderRadius:20, padding:"3px 10px" }}>
+            <span className={dbStatus==="checking"?"pulse":""} style={{ width:6, height:6, borderRadius:"50%", background: dbStatus==="live"?C.green:dbStatus==="error"?C.red:C.orange, display:"inline-block" }} />
+            {!isMobile && <span style={{ fontSize:9, color: dbStatus==="live"?C.green:dbStatus==="error"?C.red:C.orange, letterSpacing:1 }}>
+              {dbStatus==="live"?"DB LIVE":dbStatus==="error"?"DB ERROR":"CONNECTING"}
+            </span>}
           </div>
-          <span style={{ color:C.sub, fontSize:10 }}>{admin.name}</span>
-          <button onClick={onLogout} style={{ ...btn("#1a1a1a","#888"), padding:"6px 12px", fontSize:10, border:`1px solid ${C.border2}` }}>LOGOUT</button>
+          {!isMobile && <span style={{ color:C.sub, fontSize:10 }}>{admin.name}</span>}
+          <button onClick={onLogout} style={{ ...btn("#1a1a1a","#888"), padding:"5px 10px", fontSize:9, border:`1px solid ${C.border2}` }}>
+            {isMobile ? "✕" : "LOGOUT"}
+          </button>
         </div>
       </header>
 
-      <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
-        {/* Sidebar */}
-        <nav style={{ width:180, background:C.surface, borderRight:`1px solid ${C.border}`, padding:"16px 0", flexShrink:0, display:"flex", flexDirection:"column" }}>
+      <div style={{ display:"flex", flex:1, overflow:"hidden", position:"relative" }}>
+        {/* ── MOBILE OVERLAY ── */}
+        {isMobile && navOpen && (
+          <div onClick={() => setNavOpen(false)}
+            style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:49, top:52 }} />
+        )}
+
+        {/* ── SIDEBAR ── */}
+        <nav style={{
+          width: 200,
+          background: C.surface,
+          borderRight: `1px solid ${C.border}`,
+          padding: "16px 0",
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          // Mobile: slide in/out
+          ...(isMobile ? {
+            position: "fixed", top:52, left:0, bottom:0, zIndex:50,
+            transform: navOpen ? "translateX(0)" : "translateX(-100%)",
+            transition: "transform .25s ease",
+            boxShadow: navOpen ? "4px 0 20px rgba(0,0,0,0.5)" : "none",
+          } : {})
+        }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 20px", background: tab===t.id ? "#F5C51815" : "transparent",
+            <button key={t.id} onClick={() => changeTab(t.id)}
+              style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 20px",
+                background: tab===t.id ? "#F5C51815" : "transparent",
                 borderLeft: tab===t.id ? `2px solid ${C.yellow}` : "2px solid transparent",
                 border:"none", borderRight:"none", cursor:"pointer", width:"100%", textAlign:"left",
-                color: tab===t.id ? C.yellow : C.sub, fontSize:10, letterSpacing:1, fontFamily:mono }}>
-              <span style={{ fontSize:14 }}>{t.icon}</span> {t.label.toUpperCase()}
+                color: tab===t.id ? C.yellow : C.sub, fontSize:11, letterSpacing:1, fontFamily:mono }}>
+              <span style={{ fontSize:15, width:18 }}>{t.icon}</span>
+              {t.label.toUpperCase()}
             </button>
           ))}
 
-          {/* Stats at bottom */}
+          {/* Quick stats */}
           <div style={{ marginTop:"auto", padding:"16px 20px", borderTop:`1px solid ${C.border}` }}>
             <p style={{ color:"#222", fontSize:9, letterSpacing:1, marginBottom:8 }}>QUICK STATS</p>
-            <p style={{ color:C.muted, fontSize:10 }}><span style={{ color:C.yellow }}>{movies.length}</span> movies</p>
-            <p style={{ color:C.muted, fontSize:10, marginTop:4 }}><span style={{ color:C.yellow }}>{movies.filter(m=>m.featured).length}</span> featured</p>
-            <p style={{ color:C.muted, fontSize:10, marginTop:4 }}><span style={{ color:C.yellow }}>{ottPlatforms.length}</span> platforms</p>
+            <p style={{ color:C.muted, fontSize:10 }}><span style={{color:C.yellow}}>{movies.length}</span> movies</p>
+            <p style={{ color:C.muted, fontSize:10, marginTop:4 }}><span style={{color:C.yellow}}>{movies.filter(m=>m.featured).length}</span> featured</p>
+            <p style={{ color:C.muted, fontSize:10, marginTop:4 }}><span style={{color:C.yellow}}>{ottPlatforms.length}</span> platforms</p>
           </div>
         </nav>
 
-        {/* Main Content */}
-        <main style={{ flex:1, overflow:"auto", padding:24 }}>
+        {/* ── MAIN CONTENT ── */}
+        <main style={{ flex:1, overflow:"auto", padding: isMobile ? 14 : 24, ...(isMobile?{}:{}) }}>
+          {/* Mobile tab title */}
+          {isMobile && (
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+              <span style={{ fontSize:18, color:C.yellow }}>{activeTab?.icon}</span>
+              <h2 style={{ fontFamily:display, fontSize:16, letterSpacing:2 }}>{activeTab?.label?.toUpperCase()}</h2>
+            </div>
+          )}
           <div className="fade-in" key={tab}>
-            {tab === "overview"  && <OverviewTab movies={movies} analytics={analytics} dbStatus={dbStatus} />}
-            {tab === "movies"    && <MoviesTab movies={movies} ottPlatforms={ottPlatforms} />}
-            {tab === "analytics" && <AnalyticsTab analytics={analytics} movies={movies} />}
-            {tab === "system"    && <SystemTab dbStatus={dbStatus} />}
-            {tab === "ott"       && <OttTab ottPlatforms={ottPlatforms} setOttPlatforms={setOttPlatforms} />}
+            {tab==="overview"  && <OverviewTab  movies={movies} analytics={analytics} dbStatus={dbStatus} isMobile={isMobile} />}
+            {tab==="movies"    && <MoviesTab    movies={movies} ottPlatforms={ottPlatforms} isMobile={isMobile} />}
+            {tab==="analytics" && <AnalyticsTab analytics={analytics} movies={movies} isMobile={isMobile} />}
+            {tab==="system"    && <SystemTab    dbStatus={dbStatus} />}
+            {tab==="ott"       && <OttTab       ottPlatforms={ottPlatforms} setOttPlatforms={setOttPlatforms} isMobile={isMobile} />}
           </div>
         </main>
       </div>
@@ -339,63 +383,104 @@ function Dashboard({ admin, onLogout }) {
   );
 }
 
+// window width hook
+function useWindowWidth() {
+  const [w, setW] = useState(window.innerWidth);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return w;
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // TAB: OVERVIEW
 // ═══════════════════════════════════════════════════════════════════════
-function OverviewTab({ movies, analytics, dbStatus }) {
-  const featured  = movies.filter(m => m.featured).length;
-  const avgImdb   = movies.length ? (movies.reduce((s,m) => s + (m.imdb||0), 0) / movies.length).toFixed(1) : "—";
-  const genres    = [...new Set(movies.flatMap(m => m.genre||[]))].length;
+function OverviewTab({ movies, analytics, dbStatus, isMobile }) {
+  const featured = movies.filter(m => m.featured).length;
+  const avgImdb  = movies.length ? (movies.reduce((s,m) => s+(m.imdb||0),0)/movies.length).toFixed(1) : "—";
+  const genres   = [...new Set(movies.flatMap(m => m.genre||[]))].length;
 
   const statCards = [
-    { label:"Total Movies",    value: movies.length,          color: C.yellow },
-    { label:"Featured",        value: featured,               color: C.blue   },
-    { label:"Avg IMDb",        value: avgImdb,                color: C.green  },
-    { label:"Genres",          value: genres,                 color: C.orange },
-    { label:"Today Visits",    value: analytics.todayVisits,  color: "#a855f7"},
-    { label:"Total Visits",    value: analytics.totalVisits,  color: "#ec4899"},
+    { label:"Total Movies",  value:movies.length,         color:C.yellow },
+    { label:"Featured",      value:featured,              color:C.blue   },
+    { label:"Avg IMDb",      value:avgImdb,               color:C.green  },
+    { label:"Genres",        value:genres,                color:C.orange },
+    { label:"Today Visits",  value:analytics.todayVisits, color:"#a855f7"},
+    { label:"Total Visits",  value:analytics.totalVisits, color:"#ec4899"},
   ];
+
+  const recentMovies = movies.slice(-5).reverse();
 
   return (
     <div>
-      <SectionHeader title="Overview" sub="Welcome back — here's your site at a glance" />
+      {!isMobile && <SectionHeader title="Overview" sub="Your site at a glance" />}
 
-      {/* Stat cards */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(160px,1fr))", gap:12, marginBottom:28 }}>
+      {/* Stat cards — 2 col on mobile, 3 on tablet, 6 on desktop */}
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3,1fr)", gap:10, marginBottom:24 }}>
         {statCards.map(s => (
-          <div key={s.label} style={{ ...card, padding:20 }}>
-            <p style={{ color:C.muted, fontSize:9, letterSpacing:1 }}>{s.label.toUpperCase()}</p>
-            <p style={{ fontFamily:display, fontSize:32, color:s.color, marginTop:6 }}>{s.value}</p>
+          <div key={s.label} style={{ ...card, padding: isMobile ? 14 : 20 }}>
+            <p style={{ color:C.muted, fontSize:8, letterSpacing:1 }}>{s.label.toUpperCase()}</p>
+            <p style={{ fontFamily:display, fontSize: isMobile ? 26 : 32, color:s.color, marginTop:4 }}>{s.value}</p>
           </div>
         ))}
       </div>
 
       {/* Recent movies */}
       <SectionHeader title="Recent Movies" sub="Last 5 added" />
-      <div style={{ ...card, padding:0, overflow:"hidden" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead>
-            <tr style={{ borderBottom:`1px solid ${C.border}` }}>
-              {["Title","Year","IMDb","Director","Featured"].map(h => (
-                <th key={h} style={{ padding:"10px 16px", textAlign:"left", color:C.muted, fontSize:9, letterSpacing:1, fontWeight:400 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {movies.slice(-5).reverse().map(m => (
-              <tr key={m.id} style={{ borderBottom:`1px solid ${C.border}` }}>
-                <td style={{ padding:"10px 16px", fontSize:11, color:C.text }}>{m.title}</td>
-                <td style={{ padding:"10px 16px", fontSize:11, color:C.sub }}>{m.year}</td>
-                <td style={{ padding:"10px 16px", fontSize:11, color:C.yellow }}>{m.imdb}</td>
-                <td style={{ padding:"10px 16px", fontSize:11, color:C.sub }}>{m.director}</td>
-                <td style={{ padding:"10px 16px" }}>
-                  {m.featured && <span style={{ background:"#F5C51820", color:C.yellow, fontSize:9, padding:"2px 8px", borderRadius:4 }}>★ YES</span>}
-                </td>
+
+      {isMobile ? (
+        // Mobile: card list
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {recentMovies.map(m => (
+            <div key={m.id} style={{ ...card, display:"flex", gap:12, padding:12 }}>
+              {m.poster
+                ? <img src={m.poster} style={{ width:36, height:54, objectFit:"cover", borderRadius:4, flexShrink:0 }} onError={e=>e.target.style.display="none"} />
+                : <div style={{ width:36, height:54, background:"#1a1a1a", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>?</div>
+              }
+              <div style={{ flex:1, minWidth:0 }}>
+                <p style={{ fontSize:12, color:C.text, fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.title}</p>
+                <p style={{ fontSize:10, color:C.sub, marginTop:2 }}>{m.year} · {m.director}</p>
+                <div style={{ display:"flex", gap:8, marginTop:4, alignItems:"center" }}>
+                  <span style={{ fontSize:11, color:C.yellow, fontWeight:700 }}>★ {m.imdb}</span>
+                  {m.featured && <span style={{ fontSize:8, background:"#F5C51820", color:C.yellow, padding:"1px 6px", borderRadius:3 }}>FEATURED</span>}
+                </div>
+              </div>
+            </div>
+          ))}
+          {!recentMovies.length && <p style={{ color:C.muted, fontSize:11, textAlign:"center", padding:20 }}>No movies yet</p>}
+        </div>
+      ) : (
+        // Desktop: table
+        <div style={{ ...card, padding:0, overflow:"hidden" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ borderBottom:`1px solid ${C.border}` }}>
+                {["Title","Year","IMDb","Director","Featured"].map(h => (
+                  <th key={h} style={{ padding:"10px 16px", textAlign:"left", color:C.muted, fontSize:9, letterSpacing:1, fontWeight:400 }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {recentMovies.map(m => (
+                <tr key={m.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+                  <td style={{ padding:"10px 16px", fontSize:11, color:C.text }}>{m.title}</td>
+                  <td style={{ padding:"10px 16px", fontSize:11, color:C.sub }}>{m.year}</td>
+                  <td style={{ padding:"10px 16px", fontSize:12, color:C.yellow }}>{m.imdb}</td>
+                  <td style={{ padding:"10px 16px", fontSize:11, color:C.sub }}>{m.director}</td>
+                  <td style={{ padding:"10px 16px" }}>
+                    {m.featured && <span style={{ background:"#F5C51820", color:C.yellow, fontSize:9, padding:"2px 8px", borderRadius:4 }}>★ YES</span>}
+                  </td>
+                </tr>
+              ))}
+              {!recentMovies.length && (
+                <tr><td colSpan={5} style={{ padding:24, textAlign:"center", color:C.muted, fontSize:11 }}>No movies yet</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -403,12 +488,12 @@ function OverviewTab({ movies, analytics, dbStatus }) {
 // ═══════════════════════════════════════════════════════════════════════
 // TAB: MOVIES CRUD
 // ═══════════════════════════════════════════════════════════════════════
-function MoviesTab({ movies, ottPlatforms }) {
-  const [view,   setView]   = useState("list"); // list | add | edit
-  const [editMovie, setEditMovie] = useState(null);
-  const [search, setSearch] = useState("");
+function MoviesTab({ movies, ottPlatforms, isMobile }) {
+  const [view,     setView]     = useState("list");
+  const [editMovie,setEditMovie]= useState(null);
+  const [search,   setSearch]   = useState("");
   const [deleting, setDeleting] = useState(null);
-  const [msg, setMsg]       = useState("");
+  const [msg,      setMsg]      = useState("");
 
   const filtered = movies.filter(m =>
     m.title?.toLowerCase().includes(search.toLowerCase()) ||
@@ -427,81 +512,108 @@ function MoviesTab({ movies, ottPlatforms }) {
     setDeleting(null);
   };
 
-  if (view === "add")  return <MovieForm mode="add" ottPlatforms={ottPlatforms} onBack={() => setView("list")} />;
-  if (view === "edit") return <MovieForm mode="edit" movie={editMovie} ottPlatforms={ottPlatforms} onBack={() => setView("list")} />;
+  if (view==="add")  return <MovieForm mode="add"  ottPlatforms={ottPlatforms} isMobile={isMobile} onBack={()=>setView("list")} />;
+  if (view==="edit") return <MovieForm mode="edit" movie={editMovie} ottPlatforms={ottPlatforms} isMobile={isMobile} onBack={()=>setView("list")} />;
 
   return (
     <div>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
-        <SectionHeader title="Movies" sub={`${movies.length} total in database`} noMargin />
-        <div style={{ marginLeft:"auto", display:"flex", gap:10 }}>
+      {/* Header row */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
+        {!isMobile && <SectionHeader title="Movies" sub={`${movies.length} total`} noMargin />}
+        <div style={{ marginLeft: isMobile?"0":"auto", display:"flex", gap:8, flex: isMobile?1:0, flexWrap:"wrap" }}>
           <input value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="Search movies..." style={{ ...input, width:200, padding:"7px 12px" }} />
-          <button onClick={() => setView("add")} style={{ ...btn(), whiteSpace:"nowrap" }}>+ ADD MOVIE</button>
+            placeholder="Search..." style={{ ...input, flex:1, minWidth:0, padding:"7px 10px", fontSize:11 }} />
+          <button onClick={()=>setView("add")} style={{ ...btn(), whiteSpace:"nowrap", padding:"7px 14px" }}>+ ADD</button>
         </div>
       </div>
 
-      {msg && <div style={{ background:"#0a1a0a", border:`1px solid #1a4a1a`, borderRadius:8, padding:"10px 16px", marginBottom:16, fontSize:11, color:C.green }}>{msg}</div>}
+      {msg && <div style={{ background:"#0a1a0a", border:`1px solid #1a4a1a`, borderRadius:8, padding:"10px 14px", marginBottom:12, fontSize:11, color:C.green }}>{msg}</div>}
 
-      <div style={{ ...card, padding:0, overflow:"hidden" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead>
-            <tr style={{ borderBottom:`1px solid ${C.border}` }}>
-              {["Poster","Title","Year","IMDb","Director","OTT","Actions"].map(h => (
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", color:C.muted, fontSize:9, letterSpacing:1, fontWeight:400 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(m => (
-              <tr key={m.id} style={{ borderBottom:`1px solid ${C.border}` }}
+      {isMobile ? (
+        // Mobile: card list
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {filtered.map(m => (
+            <div key={m.id} style={{ ...card, display:"flex", gap:10, padding:12 }}>
+              {m.poster
+                ? <img src={m.poster} style={{ width:40, height:60, objectFit:"cover", borderRadius:4, flexShrink:0 }} onError={e=>e.target.style.display="none"} />
+                : <div style={{ width:40, height:60, background:"#1a1a1a", borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>?</div>
+              }
+              <div style={{ flex:1, minWidth:0 }}>
+                <p style={{ fontSize:12, color:C.text, fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.title}</p>
+                <p style={{ fontSize:10, color:C.sub, marginTop:1 }}>{m.year} · {m.director}</p>
+                <div style={{ display:"flex", gap:6, marginTop:4, alignItems:"center", flexWrap:"wrap" }}>
+                  <span style={{ fontSize:11, color:C.yellow }}>★ {m.imdb}</span>
+                  {m.featured && <span style={{ fontSize:8, background:"#F5C51820", color:C.yellow, padding:"1px 5px", borderRadius:3 }}>FEATURED</span>}
+                  {(m.ott||[]).slice(0,2).map((o,i)=><span key={i} style={{ fontSize:8, background:"#1a1a1a", color:C.muted, padding:"1px 5px", borderRadius:3 }}>{o}</span>)}
+                </div>
+                <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                  <button onClick={()=>{setEditMovie(m);setView("edit");}}
+                    style={{ ...btn(C.blue,"#fff"), padding:"5px 12px", fontSize:9, flex:1 }}>EDIT</button>
+                  <button onClick={()=>handleDelete(m)} disabled={deleting===m.id}
+                    style={{ ...btn(C.red,"#fff"), padding:"5px 12px", fontSize:9, flex:1, opacity:deleting===m.id?.5:1 }}>
+                    {deleting===m.id?"...":"DELETE"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {!filtered.length && <p style={{ color:C.muted, fontSize:11, textAlign:"center", padding:20 }}>No movies found</p>}
+        </div>
+      ) : (
+        // Desktop: table
+        <div style={{ ...card, padding:0, overflow:"hidden" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ borderBottom:`1px solid ${C.border}` }}>
+                {["Poster","Title","Year","IMDb","Director","OTT","Actions"].map(h => (
+                  <th key={h} style={{ padding:"10px 14px", textAlign:"left", color:C.muted, fontSize:9, letterSpacing:1, fontWeight:400 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(m => (
+                <tr key={m.id} style={{ borderBottom:`1px solid ${C.border}` }}
                   onMouseEnter={e=>e.currentTarget.style.background="#ffffff08"}
                   onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                <td style={{ padding:"8px 14px" }}>
-                  {m.poster
-                    ? <img src={m.poster} alt="" style={{ width:28, height:42, objectFit:"cover", borderRadius:3 }} onError={e=>e.target.style.display="none"} />
-                    : <div style={{ width:28, height:42, background:"#1a1a1a", borderRadius:3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10 }}>?</div>
-                  }
-                </td>
-                <td style={{ padding:"8px 14px" }}>
-                  <p style={{ fontSize:11, color:C.text }}>{m.title}</p>
-                  {m.featured && <span style={{ fontSize:8, color:C.yellow }}>★ FEATURED</span>}
-                </td>
-                <td style={{ padding:"8px 14px", fontSize:11, color:C.sub }}>{m.year}</td>
-                <td style={{ padding:"8px 14px", fontSize:12, color:C.yellow, fontWeight:700 }}>{m.imdb}</td>
-                <td style={{ padding:"8px 14px", fontSize:11, color:C.sub }}>{m.director}</td>
-                <td style={{ padding:"8px 14px" }}>
-                  <div style={{ display:"flex", gap:3, flexWrap:"wrap", maxWidth:100 }}>
-                    {(m.ott||[]).slice(0,2).map((o,i) => (
-                      <span key={i} style={{ fontSize:8, background:"#1a1a1a", border:`1px solid ${C.border2}`, borderRadius:3, padding:"1px 5px", color:C.sub }}>{o}</span>
-                    ))}
-                    {(m.ott||[]).length > 2 && <span style={{ fontSize:8, color:C.muted }}>+{m.ott.length-2}</span>}
-                  </div>
-                </td>
-                <td style={{ padding:"8px 14px" }}>
-                  <div style={{ display:"flex", gap:6 }}>
-                    <button onClick={() => { setEditMovie(m); setView("edit"); }}
-                      style={{ ...btn(C.blue,"#fff"), padding:"4px 10px", fontSize:9 }}>EDIT</button>
-                    <button onClick={() => handleDelete(m)} disabled={deleting===m.id}
-                      style={{ ...btn(C.red,"#fff"), padding:"4px 10px", fontSize:9, opacity: deleting===m.id ? 0.5 : 1 }}>
-                      {deleting===m.id ? "..." : "DEL"}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!filtered.length && (
-              <tr><td colSpan={7} style={{ padding:32, textAlign:"center", color:C.muted, fontSize:11 }}>No movies found</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  <td style={{ padding:"8px 14px" }}>
+                    {m.poster
+                      ? <img src={m.poster} style={{ width:28, height:42, objectFit:"cover", borderRadius:3 }} onError={e=>e.target.style.display="none"} />
+                      : <div style={{ width:28, height:42, background:"#1a1a1a", borderRadius:3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10 }}>?</div>}
+                  </td>
+                  <td style={{ padding:"8px 14px" }}>
+                    <p style={{ fontSize:11, color:C.text }}>{m.title}</p>
+                    {m.featured && <span style={{ fontSize:8, color:C.yellow }}>★ FEATURED</span>}
+                  </td>
+                  <td style={{ padding:"8px 14px", fontSize:11, color:C.sub }}>{m.year}</td>
+                  <td style={{ padding:"8px 14px", fontSize:12, color:C.yellow, fontWeight:700 }}>{m.imdb}</td>
+                  <td style={{ padding:"8px 14px", fontSize:11, color:C.sub }}>{m.director}</td>
+                  <td style={{ padding:"8px 14px" }}>
+                    <div style={{ display:"flex", gap:3, flexWrap:"wrap", maxWidth:100 }}>
+                      {(m.ott||[]).slice(0,2).map((o,i)=><span key={i} style={{ fontSize:8, background:"#1a1a1a", border:`1px solid ${C.border2}`, borderRadius:3, padding:"1px 5px", color:C.sub }}>{o}</span>)}
+                      {(m.ott||[]).length>2 && <span style={{ fontSize:8, color:C.muted }}>+{m.ott.length-2}</span>}
+                    </div>
+                  </td>
+                  <td style={{ padding:"8px 14px" }}>
+                    <div style={{ display:"flex", gap:6 }}>
+                      <button onClick={()=>{setEditMovie(m);setView("edit");}} style={{ ...btn(C.blue,"#fff"), padding:"4px 10px", fontSize:9 }}>EDIT</button>
+                      <button onClick={()=>handleDelete(m)} disabled={deleting===m.id} style={{ ...btn(C.red,"#fff"), padding:"4px 10px", fontSize:9, opacity:deleting===m.id?.5:1 }}>
+                        {deleting===m.id?"...":"DEL"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!filtered.length && <tr><td colSpan={7} style={{ padding:32, textAlign:"center", color:C.muted, fontSize:11 }}>No movies found</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── MOVIE FORM (ADD / EDIT) ───────────────────────────────────────────
-function MovieForm({ mode, movie, ottPlatforms, onBack }) {
+function MovieForm({ mode, movie, ottPlatforms, onBack, isMobile }) {
   const [movieSearch, setMovieSearch] = useState("");
   const [status, setStatus]   = useState(mode==="edit" ? "ready" : "idle");
   const [error,  setError]    = useState("");
@@ -599,7 +711,7 @@ function MovieForm({ mode, movie, ottPlatforms, onBack }) {
       )}
 
       {(status === "ready" || status === "saving" || status === "saved" || mode==="edit") && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+        <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:16 }}>
           {/* Left column */}
           <div>
             <div style={{ ...card }}>
@@ -677,7 +789,7 @@ function MovieForm({ mode, movie, ottPlatforms, onBack }) {
 // ═══════════════════════════════════════════════════════════════════════
 // TAB: ANALYTICS
 // ═══════════════════════════════════════════════════════════════════════
-function AnalyticsTab({ analytics, movies }) {
+function AnalyticsTab({ analytics, movies, isMobile }) {
   const topGenres = Object.entries(
     movies.flatMap(m=>m.genre||[]).reduce((acc,g) => ({ ...acc, [g]:(acc[g]||0)+1 }), {})
   ).sort((a,b)=>b[1]-a[1]).slice(0,8);
@@ -695,7 +807,7 @@ function AnalyticsTab({ analytics, movies }) {
       <SectionHeader title="Analytics" sub="Site traffic and content statistics" />
 
       {/* Visit cards */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:24 }}>
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap:12, marginBottom:24 }}>
         {[
           { label:"Total Visits",  value: analytics.totalVisits, color:C.yellow, icon:"◈" },
           { label:"Today",         value: analytics.todayVisits,  color:C.green,  icon:"▲" },
@@ -713,7 +825,7 @@ function AnalyticsTab({ analytics, movies }) {
         ))}
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap:16 }}>
         {/* Top Genres */}
         <div style={{ ...card }}>
           <p style={{ color:C.muted, fontSize:9, letterSpacing:1, marginBottom:16 }}>GENRES IN DATABASE</p>
@@ -797,7 +909,7 @@ useEffect(() => {
 // ═══════════════════════════════════════════════════════════════════════
 // TAB: SYSTEM HEALTH
 // ═══════════════════════════════════════════════════════════════════════
-function SystemTab({ dbStatus }) {
+function SystemTab({ dbStatus, isMobile }) {
   const [checks, setChecks] = useState({
     firebase: { status:"checking", msg:"" },
     groq:     { status:"checking", msg:"" },
@@ -875,7 +987,7 @@ function SystemTab({ dbStatus }) {
       </div>
 
       {/* Service cards */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:24 }}>
+      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap:12, marginBottom:24 }}>
         {services.map(s => {
           const c = checks[s.key];
           return (
@@ -902,7 +1014,7 @@ function SystemTab({ dbStatus }) {
       {/* ENV Variables status */}
       <div style={{ ...card, marginBottom:16 }}>
         <p style={{ color:C.muted, fontSize:9, letterSpacing:1, marginBottom:14 }}>ENVIRONMENT VARIABLES</p>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+        <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap:10 }}>
           {[
             { key:"VITE_GROQ_KEY",  val:GROQ_API_KEY, label:"Groq API Key" },
             { key:"VITE_TMDB_KEY",  val:TMDB_API_KEY, label:"TMDb API Key" },
@@ -942,7 +1054,7 @@ function SystemTab({ dbStatus }) {
 // ═══════════════════════════════════════════════════════════════════════
 // TAB: OTT MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════
-function OttTab({ ottPlatforms, setOttPlatforms }) {
+function OttTab({ ottPlatforms, setOttPlatforms, isMobile }) {
   const [name,   setName]   = useState("");
   const [image,  setImage]  = useState("");
   const [order,  setOrder]  = useState("");
@@ -988,7 +1100,7 @@ function OttTab({ ottPlatforms, setOttPlatforms }) {
       {/* Add new */}
       <div style={{ ...card, marginBottom:20 }}>
         <p style={{ color:C.muted, fontSize:9, letterSpacing:1, marginBottom:14 }}>ADD NEW PLATFORM</p>
-        <div style={{ display:"grid", gridTemplateColumns:"2fr 4fr 1fr auto", gap:10, alignItems:"end" }}>
+        <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 4fr 1fr auto", gap:10, alignItems:"end" }}>
           <div>
             <label style={{ display:"block", color:C.muted, fontSize:9, letterSpacing:1, marginBottom:5 }}>NAME</label>
             <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Netflix" style={input} />
