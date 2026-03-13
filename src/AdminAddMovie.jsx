@@ -1,19 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────
-// AdminAddMovie.jsx
-// Type a movie name → Gemini AI fills all details → Save to Firebase
-//
-// HOW TO USE:
-//   1. Get free Gemini API key from https://aistudio.google.com/apikey
-//   2. Paste your key in GEMINI_API_KEY below
-//   3. Visit /admin on your site (add route in main.jsx)
+// AdminAddMovie.jsx — AI powered movie adder
+// OTT platforms are loaded from Firebase ott_platforms collection
+// To add new OTT: add document in Firebase, no code change needed!
 // ─────────────────────────────────────────────────────────────────────
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-// ── PASTE YOUR GEMINI API KEY HERE ────────────────────────────────────
-const GEMINI_API_KEY = "AIzaSyAJNn5mKFktU-hfniFv9Ep520qGD9v7Gjk";
+const GROQ_API_KEY = import.meta.env.VITE_MODAL;
 
-// ── YOUR FIREBASE CONFIG (same as App.jsx) ────────────────────────────
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDi9KTtfyOHY8McVA1ObzloNOekGY_tgfI",
   authDomain: "cinecriticdb.firebaseapp.com",
@@ -23,73 +17,62 @@ const FIREBASE_CONFIG = {
   appId: "1:855382839651:web:e9fa724bd796e7af258356"
 };
 
-// ── OTT PLATFORM ICONS ────────────────────────────────────────────────
-const OTT_PLATFORMS = [
-  { name:"Netflix",     icon:"https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/Netflix_2015_logo.svg/640px-Netflix_2015_logo.svg.png" },
-  { name:"Prime Video", icon:"https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Amazon_Prime_Video_logo.svg/640px-Amazon_Prime_Video_logo.svg.png" },
-  { name:"Disney+",     icon:"https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Disney%2B_logo.svg/640px-Disney%2B_logo.svg.png" },
-  { name:"Hotstar",     icon:"https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Disney%2B_Hotstar_logo.svg/640px-Disney%2B_Hotstar_logo.svg.png" },
-  { name:"Apple TV+",   icon:"https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Apple_TV_Plus_Logo.svg/640px-Apple_TV_Plus_Logo.svg.png" },
-  { name:"JioCinema",   icon:"https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/JioCinema_logo.svg/640px-JioCinema_logo.svg.png" },
-  { name:"SonyLIV",     icon:"https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/SonyLIV.svg/640px-SonyLIV.svg.png" },
-  { name:"ZEE5",        icon:"https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/ZEE5.svg/640px-ZEE5.svg.png" },
-];
-
 // ── FIREBASE HELPER ───────────────────────────────────────────────────
 async function getFirebase() {
-  const [{ initializeApp, getApps }, { getFirestore, collection, addDoc }] = await Promise.all([
+  const [{ initializeApp, getApps }, { getFirestore, collection, addDoc, getDocs }] = await Promise.all([
     import("https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"),
     import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"),
   ]);
   const app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
-  return { fs: getFirestore(app), collection, addDoc };
+  return { fs: getFirestore(app), collection, addDoc, getDocs };
 }
 
-// ── GEMINI HELPER ─────────────────────────────────────────────────────
-async function askGemini(movieName) {
-  const prompt = `
-You are a movie database assistant. For the movie "${movieName}", return ONLY a valid JSON object with these exact fields. No explanation, no markdown, just the raw JSON.
+// ── GROQ AI HELPER ────────────────────────────────────────────────────
+// Using Groq (free, fast, works in India) instead of Gemini
+async function askGroq(movieName) {
+  const prompt = `You are a movie database assistant. For the movie "${movieName}", return ONLY a valid JSON object. No explanation, no markdown, no code fences. Start directly with { and end with }.
 
-{
-  "title": "exact movie title",
-  "year": 2023,
-  "imdb": 8.5,
-  "director": "Director Full Name",
-  "runtime": "142 min",
-  "rating": "PG-13",
-  "reviewer": "CinéCritic",
-  "review": "A 1-2 sentence compelling review of the film from a critic's perspective.",
-  "featured": false,
-  "poster": "https://image.tmdb.org/t/p/w1280/POSTER_PATH.jpg",
-  "genre": ["Genre1", "Genre2"],
-  "ott": []
-}
+{"title":"exact movie title","year":2023,"imdb":8.5,"director":"Director Full Name","runtime":"142 min","rating":"PG-13","reviewer":"CinéCritic","review":"A compelling 2-sentence critic review.","featured":false,"poster":"","genre":["Genre1","Genre2"],"ott":[]}
 
-For the poster, use the real TMDb poster URL if you know it (format: https://image.tmdb.org/t/p/w1280/XXXXX.jpg). If unsure, use empty string "".
-For genre use 1-3 from: Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Fantasy, History, Horror, Music, Mystery, Romance, Sci-Fi, Thriller, War, Western.
-For rating use: G, PG, PG-13, R, NC-17.
-For imdb use the real IMDb score as a number.
-`;
+Rules:
+- year: integer, no quotes
+- imdb: decimal number like 8.5, no quotes
+- genre: 1-3 items from: Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Fantasy, History, Horror, Music, Mystery, Romance, Sci-Fi, Thriller, War, Western
+- rating: one of G, PG, PG-13, R, NC-17, UA, A
+- poster: leave as empty string ""
+- ott: empty array []`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
-      }),
-    }
-  );
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 1024,
+    }),
+  });
 
-  if (!res.ok) throw new Error(`Gemini error: ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`Groq API error ${res.status}: ${errBody}`);
+  }
+
   const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const text = data.choices?.[0]?.message?.content || "";
+  if (!text) throw new Error("Groq returned empty response");
 
-  // Strip any markdown code fences if present
-  const clean = text.replace(/```json|```/g, "").trim();
-  return JSON.parse(clean);
+  // Find the JSON object in the response
+  const jsonStart = text.indexOf("{");
+  const jsonEnd   = text.lastIndexOf("}");
+  if (jsonStart === -1 || jsonEnd === -1) {
+    throw new Error("No JSON found in response: " + text.slice(0, 100));
+  }
+
+  return JSON.parse(text.slice(jsonStart, jsonEnd + 1));
 }
 
 // ── FIELD COMPONENT ───────────────────────────────────────────────────
@@ -122,10 +105,27 @@ const TextArea = ({ label, value, onChange }) => (
 
 // ── MAIN ADMIN PAGE ───────────────────────────────────────────────────
 export default function AdminAddMovie() {
-  const [movieSearch, setMovieSearch] = useState("");
-  const [status,      setStatus]      = useState("idle"); // idle | loading | ready | saving | saved | error
-  const [error,       setError]       = useState("");
-  const [selectedOtt, setSelectedOtt] = useState([]);
+  const [movieSearch,  setMovieSearch]  = useState("");
+  const [status,       setStatus]       = useState("idle");
+  const [error,        setError]        = useState("");
+  const [selectedOtt,  setSelectedOtt]  = useState([]);
+  const [ottPlatforms, setOttPlatforms] = useState([]); // loaded from Firebase
+
+  // Load OTT platforms from Firebase on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const fb = await getFirebase();
+        const snap = await fb.getDocs(fb.collection(fb.fs, "ott_platforms"));
+        const list = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (a.order || 99) - (b.order || 99));
+        if (list.length) setOttPlatforms(list);
+      } catch (e) {
+        console.log("Could not load OTT platforms:", e.message);
+      }
+    })();
+  }, []);
 
   // Movie fields
   const [title,    setTitle]    = useState("");
@@ -150,15 +150,15 @@ export default function AdminAddMovie() {
   // ── STEP 1: Ask Gemini ──────────────────────────────────────────────
   const handleGenerate = async () => {
     if (!movieSearch.trim()) return;
-    if (GEMINI_API_KEY === "YOUR_GEMINI_API_KEY") {
-      setError("Please paste your Gemini API key at the top of AdminAddMovie.jsx");
+    if (GROQ_API_KEY === "YOUR_GROQ_API_KEY" || !GROQ_API_KEY) {
+      setError("Please paste your Groq API key at the top of .env file");
       setStatus("error");
       return;
     }
     setStatus("loading");
     setError("");
     try {
-      const data = await askGemini(movieSearch);
+      const data = await askGroq(movieSearch);
       setTitle(data.title    || "");
       setYear(String(data.year || ""));
       setImdb(String(data.imdb || ""));
@@ -173,7 +173,7 @@ export default function AdminAddMovie() {
       setSelectedOtt([]);
       setStatus("ready");
     } catch (e) {
-      setError("Gemini could not fetch this movie. Try a different spelling or check your API key.");
+      setError("Groq could not fetch this movie. Try a different spelling or check your API key.");
       setStatus("error");
     }
   };
@@ -210,9 +210,9 @@ export default function AdminAddMovie() {
     }
   };
 
-  const toggleOtt = (iconUrl) => {
+  const toggleOtt = (name) => {
     setSelectedOtt(prev =>
-      prev.includes(iconUrl) ? prev.filter(u=>u!==iconUrl) : [...prev, iconUrl]
+      prev.includes(name) ? prev.filter(u => u !== name) : [...prev, name]
     );
   };
 
@@ -244,20 +244,20 @@ export default function AdminAddMovie() {
             ADD MOVIE WITH AI
           </h1>
           <p style={{ color:"#444", fontSize:10, fontFamily:"'Space Mono',monospace" }}>
-            Type any movie name → Gemini fills all details → Save to Firebase instantly
+            Type any movie name → Groq AI fills all details → Save to Firebase instantly
           </p>
         </div>
 
         {/* API key warning */}
-        {GEMINI_API_KEY === "YOUR_GEMINI_API_KEY" && (
+        {GROQ_API_KEY === "YOUR_GROQ_API_KEY" || !GROQ_API_KEY && (
           <div style={{ background:"#1a0a00", border:"1px solid #F5C51860", borderRadius:10,
             padding:"14px 16px", marginBottom:24 }}>
-            <p style={{ color:"#F5C518", fontSize:10, fontFamily:"'Space Mono',monospace", margin:"0 0 6px" }}>⚠ GEMINI API KEY MISSING</p>
+            <p style={{ color:"#F5C518", fontSize:10, fontFamily:"'Space Mono',monospace", margin:"0 0 6px" }}>⚠ GROQ API KEY MISSING</p>
             <p style={{ color:"#888", fontSize:11, lineHeight:1.6, margin:0 }}>
-              1. Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer"
-                style={{ color:"#F5C518" }}>aistudio.google.com/apikey</a> — it's free<br/>
+              1. Go to <a href="https://console.groq.com" target="_blank" rel="noreferrer"
+                style={{ color:"#F5C518" }}>console.groq.com</a> — it's free<br/>
               2. Click "Create API Key"<br/>
-              3. Paste it at the top of <code style={{ color:"#F5C518" }}>AdminAddMovie.jsx</code>
+              3. Paste it at the top of <code style={{ color:"#F5C518" }}>.env file</code>
             </p>
           </div>
         )}
@@ -291,7 +291,7 @@ export default function AdminAddMovie() {
                   <span style={{ animation:"spin 1s linear infinite", display:"inline-block" }}>⟳</span>
                   AI thinking...
                 </>
-              ) : "✨ FETCH WITH AI"}
+              ) : "✨ FETCH WITH GROQ AI"}
             </button>
           </div>
           {error && (
@@ -306,7 +306,7 @@ export default function AdminAddMovie() {
         {(status==="ready" || status==="saving" || status==="error") && (
           <div style={{ background:"#0d0d0d", border:"1px solid #1a1a1a", borderRadius:12, padding:"20px", marginBottom:20 }}>
             <p style={{ color:"#4caf50", fontSize:8, fontFamily:"'Anton',sans-serif", letterSpacing:2, marginBottom:18 }}>
-              ✓ STEP 2 — REVIEW &amp; EDIT (Gemini filled these in)
+              ✓ STEP 2 — REVIEW &amp; EDIT (Groq AI filled these in)
             </p>
 
             {/* Poster preview */}
@@ -354,31 +354,38 @@ export default function AdminAddMovie() {
               </div>
             </div>
 
-            {/* OTT selector */}
+            {/* OTT selector — loaded from Firebase ott_platforms collection */}
             <div style={{ marginBottom:20 }}>
               <label style={{ display:"block", color:"#555", fontSize:9, fontFamily:"'Space Mono',monospace",
                 letterSpacing:1, marginBottom:10 }}>AVAILABLE ON OTT (tap to select)</label>
-              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-                {OTT_PLATFORMS.map(p => {
-                  const active = selectedOtt.includes(p.icon);
-                  return (
-                    <div key={p.name} onClick={()=>toggleOtt(p.icon)}
-                      style={{ cursor:"pointer", textAlign:"center" }}>
-                      <div style={{ width:48, height:48, borderRadius:12, overflow:"hidden",
-                        border: `2px solid ${active ? "#F5C518" : "#222"}`,
-                        background:"#1a1a1a", marginBottom:4,
-                        boxShadow: active ? "0 0 12px rgba(245,197,24,0.4)" : "none",
-                        transition:"all 0.2s" }}>
-                        <img src={p.icon} alt={p.name}
-                          style={{ width:"100%", height:"100%", objectFit:"cover" }}
-                          onError={e=>e.target.style.display="none"} />
+              {ottPlatforms.length === 0 ? (
+                <p style={{ color:"#444", fontSize:10, fontFamily:"'Space Mono',monospace" }}>
+                  No OTT platforms found in Firebase. Add documents to the <code style={{color:"#F5C518"}}>ott_platforms</code> collection.
+                </p>
+              ) : (
+                <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+                  {ottPlatforms.map(p => {
+                    const active = selectedOtt.includes(p.name);
+                    return (
+                      <div key={p.name} onClick={() => toggleOtt(p.name)}
+                        style={{ cursor:"pointer", textAlign:"center" }}>
+                        <div style={{ width:52, height:52, borderRadius:12,
+                          border: `2px solid ${active ? "#F5C518" : "#333"}`,
+                          background:"#fff", padding:5,
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          boxShadow: active ? "0 0 14px rgba(245,197,24,0.5)" : "none",
+                          transition:"all 0.2s" }}>
+                          <img src={p.image} alt={p.name}
+                            style={{ width:"100%", height:"100%", objectFit:"contain" }}
+                            onError={e => { e.target.parentElement.style.background="#1a1a1a"; e.target.style.display="none"; }} />
+                        </div>
+                        <p style={{ color: active ? "#F5C518" : "#555", fontSize:8,
+                          fontFamily:"'Space Mono',monospace", marginTop:4 }}>{p.name}</p>
                       </div>
-                      <p style={{ color: active?"#F5C518":"#444", fontSize:7,
-                        fontFamily:"'Space Mono',monospace" }}>{p.name}</p>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

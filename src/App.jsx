@@ -2,12 +2,48 @@ import { useState, useEffect, Component } from "react";
 import { Top250Page, MostPopularPage, NewReleasesPage, ReleaseCalendarPage } from "./MoviePages";
 
 // Auto-upgrades any TMDb poster URL to w780 for crisp display on all screens
-// w342 → too small, w500 → OK desktop, w780 → sharp on all phones
 function getPoster(url) {
   if (!url) return "";
   return url.replace("/t/p/w500/", "/t/p/w1280/")
             .replace("/t/p/w342/", "/t/p/w1280/")
             .replace("/t/p/w185/", "/t/p/w1280/");
+}
+
+// OTT platform logos — stored as name strings in Firebase, rendered as colored badges
+// ott field in Firebase should be array of names: ["Netflix", "Prime Video", "Hotstar"]
+const OTT_STYLES = {
+  "Netflix":      { bg:"#E50914", text:"#fff", short:"N" },
+  "Prime Video":  { bg:"#00A8E1", text:"#fff", short:"P" },
+  "Amazon Prime": { bg:"#00A8E1", text:"#fff", short:"P" },
+  "Disney+":      { bg:"#113CCF", text:"#fff", short:"D+" },
+  "Hotstar":      { bg:"#1F80E0", text:"#fff", short:"HS" },
+  "Apple TV+":    { bg:"#000000", text:"#fff", short:"A" },
+  "JioCinema":    { bg:"#6B21A8", text:"#fff", short:"JC" },
+  "SonyLIV":      { bg:"#FF6B00", text:"#fff", short:"SL" },
+  "ZEE5":         { bg:"#7B2FBE", text:"#fff", short:"Z5" },
+  "Mubi":         { bg:"#000000", text:"#fff", short:"M" },
+  "Aha":          { bg:"#F5C518", text:"#000", short:"Aha" },
+};
+
+// Renders OTT as a colored pill badge with name
+function OttBadge({ name }) {
+  const style = OTT_STYLES[name] || { bg:"#222", text:"#fff", short: name.slice(0,2) };
+  return (
+    <div style={{
+      background: style.bg,
+      color: style.text,
+      borderRadius: 8,
+      padding: "5px 10px",
+      fontSize: 10,
+      fontFamily: "'Space Mono',monospace",
+      fontWeight: "bold",
+      letterSpacing: 0.5,
+      whiteSpace: "nowrap",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+    }}>
+      {name}
+    </div>
+  );
 }
 
 const FIREBASE_CONFIG = {
@@ -48,14 +84,15 @@ async function getFirebase() {
   if (_firebase) return _firebase;
   if (isPlaceholderConfig()) return null;
   try {
-    const [{ initializeApp, getApps }, { getFirestore, collection, onSnapshot }] = await withTimeout(
+    const [{ initializeApp, getApps }, { getFirestore, collection, onSnapshot, getDocs }] = await withTimeout(
       Promise.all([
         import("https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"),
         import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"),
       ]), 8000
     );
     const app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
-    _firebase = { fs: getFirestore(app), collection, onSnapshot };
+    const fs  = getFirestore(app);
+    _firebase = { fs, collection, onSnapshot, getDocs };
     return _firebase;
   } catch { return null; }
 }
@@ -283,7 +320,14 @@ const HeroBanner = ({ movie, onClick, isMobile }) => {
 };
 
 // ── MOVIE DETAIL MODAL ────────────────────────────────────────────────
-const MovieModal = ({ movie, onClose, isMobile }) => {
+const MovieModal = ({ movie, onClose, isMobile, ottPlatforms = {} }) => {
+  // Resolve OTT: if value is a URL use directly, if name look up from ottPlatforms db
+  const resolveOtt = (val) => {
+    if (!val) return null;
+    if (val.startsWith('http') || val.startsWith('data:')) return val; // direct URL
+    // Try exact match first, then lowercase, then uppercase
+    return ottPlatforms[val] || ottPlatforms[val.toLowerCase()] || ottPlatforms[val.toUpperCase()] || null;
+  };
   useEffect(() => {
     const h = e => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", h);
@@ -334,16 +378,25 @@ const MovieModal = ({ movie, onClose, isMobile }) => {
             <div style={{ borderTop:"1px solid #1a1a1a", paddingTop:14, marginBottom:16 }}>
               <p style={{ color:"#444", fontSize:8, fontFamily:"'Space Mono',monospace", letterSpacing:1, margin:"0 0 10px" }}>AVAILABLE ON</p>
               <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-                {(movie.ott||[]).map((url, i) => (
-                  <div key={i} style={{ width:40, height:40, borderRadius:10, overflow:"hidden",
-                    border:"1px solid #2a2a2a", background:"#1a1a1a",
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    boxShadow:"0 4px 12px rgba(0,0,0,0.4)" }}>
-                    <img src={url} alt={`ott-${i}`}
-                      style={{ width:"100%", height:"100%", objectFit:"cover", borderRadius:9 }}
-                      onError={e => { e.target.style.display="none"; }} />
-                  </div>
-                ))}
+                {(movie.ott||[]).map((val, i) => {
+                  const imgUrl = resolveOtt(val);
+                  const label = val.startsWith('http') || val.startsWith('data:') ? '' : val;
+                  if (!imgUrl) return (
+                    <div key={i} style={{ background:"#1a1a1a", border:"1px solid #2a2a2a",
+                      borderRadius:8, padding:"5px 10px", fontSize:9,
+                      fontFamily:"'Space Mono',monospace", color:"#888" }}>{label||'OTT'}</div>
+                  );
+                  return (
+                    <div key={i} style={{ width:44, height:44, borderRadius:10,
+                      border:"1px solid #2a2a2a", background:"#fff",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      padding:5, boxShadow:"0 2px 8px rgba(0,0,0,0.5)" }}>
+                      <img src={imgUrl} alt={label}
+                        style={{ width:"100%", height:"100%", objectFit:"contain" }}
+                        onError={e => { e.target.style.opacity='0'; }} />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -400,19 +453,26 @@ const MovieModal = ({ movie, onClose, isMobile }) => {
               {(movie.ott||[]).length > 0 && (
                 <div style={{ marginBottom:14 }}>
                   <p style={{ color:"#444", fontSize:8, fontFamily:"'Space Mono',monospace", letterSpacing:1, margin:"0 0 10px" }}>AVAILABLE ON</p>
-                  <div style={{ display:"flex", gap:9, flexWrap:"wrap" }}>
-                    {(movie.ott||[]).map((url, i) => (
-                      <div key={i} style={{ width:44, height:44, borderRadius:11, overflow:"hidden",
-                        border:"1px solid #2a2a2a", background:"#1a1a1a",
-                        boxShadow:"0 4px 14px rgba(0,0,0,0.5)",
-                        transition:"transform 0.2s, box-shadow 0.2s" }}
-                        onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 8px 20px rgba(0,0,0,0.6)"; }}
-                        onMouseLeave={e=>{ e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.5)"; }}>
-                        <img src={url} alt={`ott-${i}`}
-                          style={{ width:"100%", height:"100%", objectFit:"cover", borderRadius:10 }}
-                          onError={e=>{ e.target.style.display="none"; }} />
-                      </div>
-                    ))}
+                  <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                    {(movie.ott||[]).map((val, i) => {
+                      const imgUrl = resolveOtt(val);
+                      const label = val.startsWith('http') || val.startsWith('data:') ? '' : val;
+                      if (!imgUrl) return (
+                        <div key={i} style={{ background:"#1a1a1a", border:"1px solid #2a2a2a",
+                          borderRadius:8, padding:"6px 12px", fontSize:10,
+                          fontFamily:"'Space Mono',monospace", color:"#888" }}>{label||'OTT'}</div>
+                      );
+                      return (
+                        <div key={i} style={{ width:48, height:48, borderRadius:10,
+                          border:"1px solid #2a2a2a", background:"#fff",
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          padding:6, boxShadow:"0 2px 10px rgba(0,0,0,0.5)" }}>
+                          <img src={imgUrl} alt={label}
+                            style={{ width:"100%", height:"100%", objectFit:"contain" }}
+                            onError={e => { e.target.style.opacity='0'; }} />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -560,6 +620,7 @@ export default function Root() {
 
 function App() {
   const [movies,         setMovies]         = useState([]);
+  const [ottPlatforms,   setOttPlatforms]   = useState({}); // { "Netflix": "https://...", ... }
   const [loading,        setLoading]        = useState(true);
   const [dataSource,     setDataSource]     = useState("loading");
   const [selectedGenre,  setSelectedGenre]  = useState("All");
@@ -571,7 +632,7 @@ function App() {
   const [sidebarOpen,    setSidebarOpen]    = useState(false);
   const [filterDrawer,   setFilterDrawer]   = useState(false);
   const [searchOpen,     setSearchOpen]     = useState(false);
-  const [activeTab,      setActiveTab]      = useState("home"); // "home"|"top-rated"|"new-releases"|"top250"|"most-popular"|"release-calendar"
+  const [activeTab,      setActiveTab]      = useState("home");
   const [moreOpen,       setMoreOpen]       = useState(false);
 
   // Detect mobile
@@ -615,10 +676,45 @@ function App() {
     return () => { clearTimeout(hardTimeout); unsubscribe&&unsubscribe(); };
   }, []);
 
+  // Fetch OTT platforms from Firebase ott_platforms collection
+  useEffect(() => {
+    (async () => {
+      try {
+        const fb = await getFirebase();
+        if (!fb || !fb.getDocs) return;
+        const snap = await fb.getDocs(fb.collection(fb.fs, "ott_platforms"));
+        if (snap.empty) return;
+        const map = {};
+        snap.docs.forEach(d => {
+          const data = d.data();
+          if (data.name && data.image) {
+            map[data.name] = data.image;              // exact: "Netflix"
+            map[data.name.toLowerCase()] = data.image; // lowercase: "netflix"
+            map[data.name.toUpperCase()] = data.image; // uppercase: "NETFLIX"
+          }
+        });
+        setOttPlatforms(map);
+      } catch (e) {
+        console.log("OTT platforms error:", e.message);
+      }
+    })();
+  }, []);
+
   const featured = movies.filter(m => m.featured);
+
+  // Reset heroIndex if it goes out of bounds when featured movies change
+  useEffect(() => {
+    if (featured.length > 0 && heroIndex >= featured.length) {
+      setHeroIndex(0);
+    }
+  }, [featured.length]);
+
   useEffect(() => {
     if (!featured.length) return;
-    const t = setInterval(() => setHeroIndex(i => (i+1)%featured.length), 6000);
+    const t = setInterval(() => setHeroIndex(i => {
+      const next = i + 1;
+      return next >= featured.length ? 0 : next;
+    }), 6000);
     return () => clearInterval(t);
   }, [featured.length]);
 
@@ -904,8 +1000,19 @@ function App() {
 
           {/* ── HOME / TOP-RATED page content ────────────────────── */}
           {(activeTab === "home" || activeTab === "top-rated") && (<>
-          {!loading && activeTab === "home" && featured.length>0 && (
-            <HeroBanner movie={featured[heroIndex%featured.length]} onClick={setSelectedMovie} isMobile={isMobile} />
+          {!loading && activeTab === "home" && featured.length > 0 && (
+            <HeroBanner movie={featured[heroIndex] || featured[0]} onClick={setSelectedMovie} isMobile={isMobile} />
+          )}
+          {/* Hero dots navigation */}
+          {!loading && activeTab === "home" && featured.length > 1 && (
+            <div style={{ display:"flex", justifyContent:"center", gap:6, marginTop:-14, marginBottom:18 }}>
+              {featured.map((_, i) => (
+                <div key={i} onClick={() => setHeroIndex(i)}
+                  style={{ width: i===heroIndex ? 20 : 6, height:6,
+                    borderRadius:3, cursor:"pointer", transition:"all 0.3s ease",
+                    background: i===heroIndex ? "#F5C518" : "#333" }} />
+              ))}
+            </div>
           )}
 
           {/* Top Rated page header */}
@@ -976,7 +1083,7 @@ function App() {
       </div>
 
       {/* Modal */}
-      {selectedMovie && <MovieModal movie={selectedMovie} onClose={()=>setSelectedMovie(null)} isMobile={isMobile} />}
+      {selectedMovie && <MovieModal movie={selectedMovie} onClose={()=>setSelectedMovie(null)} isMobile={isMobile} ottPlatforms={ottPlatforms} />}
 
       {/* ── MOBILE BOTTOM NAV ────────────────────────────────────────── */}
       {/* Footer (desktop only) */}
