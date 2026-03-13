@@ -1,13 +1,15 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import './index.css'
 import App from './App.jsx'
-import AdminAddMovie from './AdminAddMovie.jsx'
+import AdminApp from './AdminApp.jsx'
 
-// Simple router — /admin loads admin page, everything else loads the main site
-const isAdmin = window.location.pathname === '/admin'
+// /admin → AdminApp (login + full dashboard)
+// everything else → main site
+const isAdmin = window.location.pathname.startsWith('/admin')
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {isAdmin ? <AdminAddMovie /> : <App />}
+    {isAdmin ? <AdminApp /> : <App />}
   </StrictMode>
 )

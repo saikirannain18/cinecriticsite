@@ -7,6 +7,30 @@
 import { useState, useEffect } from "react";
 
 const GROQ_API_KEY = import.meta.env.VITE_MODAL;
+const TMDB_API_KEY = import.meta.env.VITE_TMDB;
+
+// ── TMDB POSTER FETCH ─────────────────────────────────────────────────
+async function fetchTmdbPoster(title, year) {
+  if (!TMDB_API_KEY) {
+    console.warn("TMDb: VITE_TMDB_KEY is missing");
+    return null;
+  }
+  try {
+    const query = encodeURIComponent(title.trim());
+    const url = `https://api.themoviedb.org/3/search/movie?query=${query}&api_key=${TMDB_API_KEY}`;
+    console.log("TMDb URL:", url);
+    const res  = await fetch(url);
+    console.log("TMDb status:", res.status);
+    const data = await res.json();
+    console.log("TMDb full response:", JSON.stringify(data).slice(0, 500));
+    const path = data.results?.[0]?.poster_path;
+    if (!path) return null;
+    return `https://image.tmdb.org/t/p/w1280${path}`;
+  } catch (e) {
+    console.error("TMDb fetch error:", e.message);
+    return null;
+  }
+}
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDi9KTtfyOHY8McVA1ObzloNOekGY_tgfI",
@@ -147,16 +171,18 @@ export default function AdminAddMovie() {
     setMovieSearch(""); setStatus("idle");
   };
 
-  // ── STEP 1: Ask Gemini ──────────────────────────────────────────────
+  // ── STEP 1: Ask Groq then fetch TMDb poster ─────────────────────────
   const handleGenerate = async () => {
     if (!movieSearch.trim()) return;
     if (GROQ_API_KEY === "YOUR_GROQ_API_KEY" || !GROQ_API_KEY) {
-      setError("Please paste your Groq API key at the top of .env file");
+      setError("❌ VITE_GROQ_KEY missing from .env");
       setStatus("error");
       return;
     }
+    if (!TMDB_API_KEY) {
+      setError("⚠️ VITE_TMDB_KEY missing — add it to .env AND Vercel env vars, then redeploy");
+    }
     setStatus("loading");
-    setError("");
     try {
       const data = await askGroq(movieSearch);
       setTitle(data.title    || "");
@@ -168,12 +194,26 @@ export default function AdminAddMovie() {
       setReview(data.review     || "");
       setReviewer(data.reviewer || "CinéCritic");
       setFeatured(data.featured || false);
-      setPoster(data.poster     || "");
       setGenre((data.genre||[]).join(", "));
       setSelectedOtt([]);
+
+      // Auto-fetch poster from TMDb
+      if (TMDB_API_KEY) {
+        const tmdbPoster = await fetchTmdbPoster(data.title || movieSearch, data.year);
+        if (tmdbPoster) {
+          setPoster(tmdbPoster);
+          setError(""); // clear any warning
+        } else {
+          setPoster(data.poster || "");
+          setError("⚠️ TMDb found no poster for this movie. You can paste a URL manually.");
+        }
+      } else {
+        setPoster(data.poster || "");
+      }
+
       setStatus("ready");
     } catch (e) {
-      setError("Groq could not fetch this movie. Try a different spelling or check your API key.");
+      setError("❌ Groq failed. Try a different spelling or check your API key.");
       setStatus("error");
     }
   };
