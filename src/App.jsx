@@ -1,12 +1,12 @@
 import { useState, useEffect, Component } from "react";
 import { Top250Page, MostPopularPage, NewReleasesPage, ReleaseCalendarPage } from "./MoviePages";
 
-// Auto-upgrades any TMDb poster URL to w780 for crisp display on all screens
-function getPoster(url) {
+// Use w500 for cards (fast), w1280 for hero/modal (crisp)
+function getPoster(url, size = "w500") {
   if (!url) return "";
-  return url.replace("/t/p/w500/", "/t/p/w1280/")
-            .replace("/t/p/w342/", "/t/p/w1280/")
-            .replace("/t/p/w185/", "/t/p/w1280/");
+  return url
+    .replace(/\/t\/p\/w\d+\//,  `/t/p/${size}/`)
+    .replace(/\/t\/p\/original\//, `/t/p/${size}/`);
 }
 
 // OTT platform logos — stored as name strings in Firebase, rendered as colored badges
@@ -418,7 +418,7 @@ const MovieModal = ({ movie, onClose, isMobile, ottPlatforms = {} }) => {
         style={{ background:"#0f0f0f", border:"1px solid #252525", borderRadius:18, maxWidth:680, width:"100%", overflow:"hidden", boxShadow:"0 40px 80px rgba(0,0,0,0.8)", animation:"modalIn 0.25s ease" }}>
         <div style={{ display:"flex" }}>
           <div style={{ width:220, flexShrink:0 }}>
-            <img src={getPoster(movie.poster)} alt={movie.title} style={{ width:"100%", height:"100%", objectFit:"cover", minHeight:340 }}
+            <img src={getPoster(movie.poster, "w1280")} alt={movie.title} style={{ width:"100%", height:"100%", objectFit:"cover", minHeight:340 }}
               onError={e => { e.target.src=`https://placehold.co/220x340/1a1a1a/F5C518?text=${encodeURIComponent(movie.title)}`; }} />
           </div>
           <div style={{ flex:1, padding:"24px 24px 20px", display:"flex", flexDirection:"column" }}>
@@ -652,7 +652,7 @@ function App() {
     let settled = false;
     const hardTimeout = setTimeout(() => {
       if (!settled) { settled=true; setMovies(FALLBACK_MOVIES); setDataSource("demo"); setLoading(false); }
-    }, 10000);
+    }, 4000);
     const useFallback = () => {
       if (settled) return;
       settled=true; clearTimeout(hardTimeout); setMovies(FALLBACK_MOVIES); setDataSource("demo"); setLoading(false);
@@ -762,16 +762,18 @@ function App() {
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:"#080808", color:"#fff" }}>
+    <div style={{ minHeight:"100vh", background:"#080808", color:"#fff", overflowX:"hidden" }}>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link href="https://fonts.googleapis.com/css2?family=Anton&family=Lora:ital,wght@0,400;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
       <style>{`
+        html, body, #root { margin:0; padding:0; background:#080808; }
         * { box-sizing:border-box; margin:0; padding:0; }
         img {
           -webkit-backface-visibility: hidden;
           backface-visibility: hidden;
           -webkit-transform: translateZ(0);
           transform: translateZ(0);
-          image-rendering: -webkit-optimize-contrast;
         }
         ::-webkit-scrollbar { width:4px; }
         ::-webkit-scrollbar-track { background:#0a0a0a; }

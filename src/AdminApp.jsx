@@ -115,18 +115,11 @@ const card = {
 // ROOT ENTRY
 // ═══════════════════════════════════════════════════════════════════════
 export default function AdminApp() {
-  const [session, setSession] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem("cc_admin") || "null"); } catch { return null; }
-  });
+  // Memory-only session — clears automatically when user leaves /admin
+  const [session, setSession] = useState(null);
 
-  const handleLogin  = (admin) => {
-    sessionStorage.setItem("cc_admin", JSON.stringify(admin));
-    setSession(admin);
-  };
-  const handleLogout = () => {
-    sessionStorage.removeItem("cc_admin");
-    setSession(null);
-  };
+  const handleLogin  = (admin) => setSession(admin);
+  const handleLogout = () => setSession(null);
 
   return (
     <>
